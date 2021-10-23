@@ -795,23 +795,7 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
     
 end
 
-function L_Shaped_Algorithm(subproblem_generator, 
-                            v_dict, 
-                            N, 
-                            master_generator, 
-                            tol = 1e-6, 
-                            maxiter=10, 
-                            probs = 1/N*ones(N))
-    
-    firststage, contoidx, h = make_two_stage_setup_L(subproblem_generator, v_dict, N, probs);
-    
-    fs = master_generator()
-    
-    ittime = @elapsed x, firststage, fs, contoidx, h, niter = iterate_L(firststage, fs, contoidx, h, v_dict, 0, tol, maxiter)
-    
-    return x, firststage, fs, contoidx, h, ittime, niter
-    
-end
+
 
 
 

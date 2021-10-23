@@ -1,7 +1,3 @@
-using JuMP
-using LinearAlgebra 
-using MathOptInterface
-
 function varRefToIdx(m)
     
     varrefs = all_variables(m)
