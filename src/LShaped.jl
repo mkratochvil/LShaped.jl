@@ -37,7 +37,6 @@ function L_Shaped_Algorithm(subproblem_generator,
                             maxiter=10, 
                             probs = 1/N*ones(N))
     
-    println("function L_Shaped_Algorithm")
     
     firststage, contoidx, h = make_two_stage_setup_L(subproblem_generator, v_dict, N, probs);
     
