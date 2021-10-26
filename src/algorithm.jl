@@ -170,9 +170,7 @@ end
 
 ### this uses direct definition and not nac constraints ###
 function iterate!(firststage) 
-    
-    println("function alg 264 iterate!")
-    
+        
     # done separately to eventually parallelize 
     for i in keys(firststage.subproblems)  
         solve_sub_and_update!(firststage.subproblems[i])
