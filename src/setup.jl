@@ -1,5 +1,5 @@
 function varRefToIdx(m)
-    
+        
     varrefs = all_variables(m)
     varreftoidx = Dict()
     
@@ -12,6 +12,7 @@ function varRefToIdx(m)
 end
     
 function varIdxToRef(m)
+        
     varrefs = all_variables(m)
     varidxtoref = Dict()
 
@@ -23,7 +24,7 @@ function varIdxToRef(m)
 end
 
 function varIdxToCost(m)
-    
+        
     varidxtocost = Dict()
     
     obj= MOI.get(m, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())
@@ -35,26 +36,9 @@ function varIdxToCost(m)
     return varidxtocost
     
 end
-#=
-function conIdxToRef(m)
-    
-    conidxtoref = Dict()
-    moi_backend = backend(m)
-    
-    for (F,S) in list_of_constraint_types(m)
-        for con in all_constraints(m,F,S)
-            f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
-            conidxtoref[con.index.value] = (F,S,f,con)
-        end
-    end
-    
-    return conidxtoref
-    
-end
-=#
 
 function conIdxToRef(m)
-    
+        
     conidxtoref = Dict()
     moi_backend = backend(m)
     index = 0
@@ -72,69 +56,8 @@ function conIdxToRef(m)
     
 end
 
-function create_eq_lt_gt_arrays(m,conidxtoref,vr)
-
-    #nvar = num_variables(m) # fails at index 11 since there are now 10 variables. make max value for keys?
-    nvar = maximum(keys(vr))
-
-    Aeq = Array{Float64}(undef, 0, nvar)
-    Ieq = Dict()
-    counteq = 0
-
-    Ageq = Array{Float64}(undef, 0, nvar)
-    Igeq = Dict()
-    countgeq = 0
-    
-    Aleq = Array{Float64}(undef, 0, nvar)
-    Ileq = Dict()
-    countleq = 0
-
-
-    for i in keys(conidxtoref)
-        row = zeros(nvar)
-        if(occursin("LessThan",string(conidxtoref[i][2]))) #find something better than this.
-            if(occursin("ScalarAffine", string(conidxtoref[i][3])))
-                for term in conidxtoref[i][3].terms
-                    row[term.variable_index.value] = term.coefficient
-                end
-            else
-                row[conidxtoref[i][3].variable.value] = 1.0;
-            end
-            countleq += 1
-            Ileq[countleq] = i
-            Aleq = [Aleq; row']
-        end
-        if(occursin("GreaterThan",string(conidxtoref[i][2]))) #find something better than this.
-            if(occursin("ScalarAffine", string(conidxtoref[i][3])))
-                for term in conidxtoref[i][3].terms
-                    row[term.variable_index.value] = term.coefficient
-                end
-            else
-                row[conidxtoref[i][3].variable.value] = 1.0;
-            end
-            countgeq += 1
-            Igeq[countgeq] = i
-            Ageq = [Ageq; row']
-        end
-        if(occursin("EqualTo",string(conidxtoref[i][2]))) #find something better than this.
-            if(occursin("ScalarAffine", string(conidxtoref[i][3])))
-                for term in conidxtoref[i][3].terms
-                    row[term.variable_index.value] = term.coefficient
-                end
-            else
-                row[conidxtoref[i][3].variable.value] = 1.0;
-            end
-            counteq += 1
-            Ieq[counteq] = i
-            Aeq = [Aeq; row']
-        end
-    end
-    
-    return Aeq, Aleq, Ageq, Ieq, Ileq, Igeq
-end
-
 function make_dicts_and_arrays(m)
-    
+        
     vr = varRefToIdx(m)
     vi = varIdxToRef(m)
     vc = varIdxToCost(m)
@@ -148,7 +71,7 @@ end
 
 
 function make_VariableInfo(vardict, vartocost, condict)
-
+    
     varstructs = Dict()
     
     for vname in keys(vardict[1])
@@ -186,7 +109,7 @@ function make_VariableInfo(vardict, vartocost, condict)
 end
 
 function make_LinkedConstraintInfo(varstructs, condict)
-# make link
+        
     linkedcons = Dict()
     for var in keys(varstructs)
         convals = varstructs[var].conval
@@ -224,6 +147,7 @@ function make_LinkedConstraintInfo(varstructs, condict)
 end
 
 function stage_name_idx(model::JuMP.Model, vardict)
+        
     vdict = Dict()
     vdict[1]=Dict()
     vdict[2]=Dict()
@@ -247,112 +171,8 @@ function stage_name_idx(model::JuMP.Model, vardict)
     return vdict
 end
 
-function make_arrays(subproblem)
-
-    m = subproblem.model
-    lci = subproblem.linkedconstraintinfo
-    nvar1 = subproblem.variableinfo.count
-    nvar2 = num_variables(m)
-
-    reindexvar1 = Dict()
-    reindexvar2 = Dict()
-    
-    count = 0
-    for i in keys(subproblem.variableinfo)
-        count += 1
-        reindexvar1[i] = count
-    end
-
-    count = 0
-    allvar = all_variables(m)
-    for i in 1:nvar2
-        count += 1
-        reindexvar2[allvar[i].index.value] = count
-    end
-
-    
-    Te = Array{Float64}(undef, 0, nvar1)
-    We = Array{Float64}(undef, 0, nvar2)
-    Ce = Dict()
-    counteq = 0
-
-    Tg = Array{Float64}(undef, 0, nvar1)
-    Wg = Array{Float64}(undef, 0, nvar2)
-    Cg = Dict()
-    countgeq = 0
-
-    Tl = Array{Float64}(undef, 0, nvar1)
-    Wl = Array{Float64}(undef, 0, nvar2)
-    Cl = Dict()
-    countleq = 0
-
-    for i in keys(lci)
-        row1 = zeros(nvar1)
-        row2 = zeros(nvar2)
-
-        if(occursin("EqualTo",string(lci[i].set))) #find something better than this.
-            
-            for vnum in lci[i].variables
-                coeff = subprob.variableinfo[vnum].conval[lci[i].id]
-                row1[reindexvar1[vnum]] = coeff
-            end
-            
-            Te = [Te; row1']
-            
-            entries = MOI.get(backend(m), MOI.ConstraintFunction(), lci[i].ref.index).terms
-            for entry in entries
-                row2[reindexvar2[entry.variable_index.value]] = entry.coefficient
-            end
-            We = [We; row2']
-            
-            counteq += 1
-            Ce[counteq] = i
-            
-        elseif(occursin("LessThan",string(lci[i].set))) #find something better than this.
-            
-            for vnum in lci[i].variables
-                coeff = subprob.variableinfo[vnum].conval[lci[i].id]
-                row1[reindexvar1[vnum]] = coeff
-            end
-            
-            Tl = [Tl; row1']
-            
-            entries = MOI.get(backend(m), MOI.ConstraintFunction(), lci[i].ref.index).terms
-            for entry in entries
-                row2[reindexvar2[entry.variable_index.value]] = entry.coefficient
-            end
-            Wl = [Wl; row2']
-            
-            countleq += 1
-            Cl[countleq] = i
-        elseif(occursin("GreaterThan",string(lci[i].set))) #find something better than this.
-            
-            for vnum in lci[i].variables
-                coeff = subprob.variableinfo[vnum].conval[lci[i].id]
-                row1[reindexvar1[vnum]] = coeff
-            end
-            
-            Tg = [Tg; row1']
-            
-            entries = MOI.get(backend(m), MOI.ConstraintFunction(), lci[i].ref.index).terms
-            for entry in entries
-                row2[reindexvar2[entry.variable_index.value]] = entry.coefficient
-            end
-            Wg = [Wg; row2']
-            
-            countgeq += 1
-            Cg[countgeq] = i
-        end
-    end
-
-    return Te, We, Ce, Tl, Wl, Cl, Tg, Wl, Cg
-
-end
-
-# make_dict_and_arrays needs to be updated as varcost and condict is all that is needed.
-### x_init not needed apparently
 function initialize(model, vnames)
-    
+        
     vardict = stage_name_idx(model, vnames)
     
     #vrm1, vindtoref, varcost, condict, Ae, Al, Ag, Ie, Il, Ig = make_dicts_and_arrays(model);
@@ -380,7 +200,7 @@ function initialize(model, vnames)
 end
 
 function update_second_index!(firststage)
-
+    
     for var in keys(firststage.variables)
         for sub = keys(firststage.subproblems)
             subproblem = firststage.subproblems[sub]
@@ -394,49 +214,12 @@ function update_second_index!(firststage)
     
 end
 
-# make into setup functions
-
-function make_two_stage_setup(subproblem_generator, v_dict, N)
-
-    models = Dict()
-
-    for i = 1:N
-        models[i] = subproblem_generator(i);
-    end
-
-    subprob = Dict()
-
-    for i = 1:N
-        model, varstructs, linkedcons, vnametoidx, arrays = initialize(models[i], v_dict)
-
-        subprob[i] = Subproblems(i, model, 1/N, varstructs, linkedcons, vnametoidx, arrays, nothing)
-
-    end
-
-    firststagevars = Dict()
-
-    for index in 1:length(v_dict[1])
-        var = v_dict[1][index]
-        # very temporary
-        #firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, x_init[1], var[4], var[2], var[3], nothing)
-        firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3], nothing)
-
-    end
-
-    firststage = FirstStageInfo(firststagevars, subprob);
-    
-    #temporary? ideally this would be when the second stage is made.
-    update_second_index!(firststage)
-    
-    return firststage
-    
-end
 
 # huge assumption that the subproblems will have the same constraint order.
 # this should be true for my problems.
 # May cause issues with WSGEP
 function ConToIdx(m)
-
+    
     contoidx = Dict()
 
     count = 0
@@ -456,7 +239,7 @@ function ConToIdx(m)
 end
 
 function compute_h(models, contoidx)
-# make link
+    
     ns = models.count
     nc = contoidx.count
     
@@ -501,7 +284,7 @@ function compute_h(models, contoidx)
 end
 
 function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*ones(N))
-
+    
     models = Dict()
 
     for i = 1:N
