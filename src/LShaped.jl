@@ -2,6 +2,7 @@ module LShaped
 
 using JuMP
 using LinearAlgebra 
+using Gurobi
 using MathOptInterface
 const MOI = MathOptInterface
 
