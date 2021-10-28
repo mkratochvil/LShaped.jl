@@ -394,7 +394,88 @@ function update_first_value_L!(firststage, fs)
     return
     
 end
+
+function setup_1st_paths!(firststage)
     
+    path = firststage.store
+    vardict = firststage.variables
+    
+    header = [];
+    for vname in keys(vardict)
+        push!(header, vname)
+    end
+    
+    nvars = length(header)
+    
+    df = DataFrame()
+    
+    dfe = DataFrame(econst = Float64[])
+    
+    for i = 1:nvars
+        insertcols!(df, i, Symbol(header[i])=>Float64[])
+    end
+    
+    mkdir(path)
+    
+    xcsv = string(path, "x.csv")
+    Ecsv = string(path, "E.csv")
+    ecsv = string(path, "ek.csv")
+    
+    CSV.write(xcsv, df)
+    CSV.write(Ecsv, df)
+    CSV.write(ecsv, dfe)
+    
+    return
+end
+
+function store_x!(firststage)
+    
+    path = firststage.store
+    xcsv = string(path, "x.csv")
+    
+    x = get_value_vector(firststage)
+    
+    sx = string(x)
+    n = length(string(x))
+
+    sx = sx[2:n-1]
+    open(xcsv, "a") do io
+        write(io, "$(sx) \n")
+    end
+    
+    return
+    
+end
+
+function store_E!(firststage, E)
+    
+    path = firststage.store
+    Ecsv = string(path, "E.csv")
+        
+    sE = string(E)
+    n = length(string(E))
+
+    sE = sE[2:n-1]
+    open(Ecsv, "a") do io
+        write(io, "$(sE) \n")
+    end
+    
+    return
+    
+end
+
+function store_e!(firststage, e_k)
+    
+    path = firststage.store
+    ecsv = string(path, "ek.csv")
+        
+    open(ecsv, "a") do io
+        write(io, "$(e_k) \n")
+    end
+    
+    return
+    
+end
 
 function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6, niter = 10)
         
@@ -410,6 +491,16 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
         optimize!(fs)
 
         update_first_value_L!(firststage, fs)
+        
+        if firststage.store != nothing
+        
+            if i == 1
+                setup_1st_paths!(firststage)
+            end
+            
+            store_x!(firststage)
+            
+        end
 
         # step 3 * update x-variables in second stage
         update_second_value!(firststage)
@@ -429,6 +520,9 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
         h = adjust_h(firststage, contoidx, h)
 
         E = cost - grad
+        if firststage.store != nothing
+            store_E!(firststage, E)
+        end
         #println("E = $(E)")
 
 
@@ -438,6 +532,10 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
         #update e_k
         e_k = compute_e(firststage,h,PI)
         println("e = $(e_k)")
+        
+        if firststage.store != nothing
+            store_e!(firststage, e_k)
+        end
 
 
         x = get_value_vector(firststage)

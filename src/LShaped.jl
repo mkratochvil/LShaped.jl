@@ -2,8 +2,9 @@ module LShaped
 
 using JuMP
 using LinearAlgebra 
-using Gurobi
 using MathOptInterface
+using DataFrames
+using CSV
 const MOI = MathOptInterface
 
 include("structs.jl")
@@ -36,10 +37,12 @@ function L_Shaped_Algorithm(subproblem_generator,
                             master_generator, 
                             tol = 1e-6, 
                             maxiter=10, 
-                            probs = 1/N*ones(N))
+                            probs = 1/N*ones(N);
+                            store = nothing)
     
+    println(store)
     
-    firststage, contoidx, h = make_two_stage_setup_L(subproblem_generator, v_dict, N, probs);
+    firststage, contoidx, h = make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store);
     
     fs = master_generator()
     

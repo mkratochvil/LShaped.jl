@@ -42,6 +42,7 @@ end
 mutable struct FirstStageInfo
     variables::Dict # dict from variable string name to FirstStageVariableInfo 
     subproblems::Dict
+    store::Union{String,Nothing}
     #probability::Float64
     #variableinfo::Any
     #linkedconstraintinfo::Any

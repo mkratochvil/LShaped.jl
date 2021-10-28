@@ -283,7 +283,7 @@ function compute_h(models, contoidx)
     
 end
 
-function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*ones(N))
+function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*ones(N), store = 0)
     
     models = Dict()
 
@@ -314,7 +314,7 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
 
     end
 
-    firststage = FirstStageInfo(firststagevars, subprob);
+    firststage = FirstStageInfo(firststagevars, subprob, store);
     
     #temporary? ideally this would be when the second stage is made.
     update_second_index!(firststage)
