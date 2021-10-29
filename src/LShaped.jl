@@ -15,12 +15,13 @@ include("algorithm.jl")
 
 """
     L_Shaped_Algorithm(subproblem_generator, 
-	v_dict, 
-	N, 
-	master_generator, 
-	tol = 1e-6, 
-	maxiter=10, 
-	probs = 1/N*ones(N))
+        v_dict, 
+        N, 
+        master_generator, 
+        tol = 1e-6, 
+        maxiter=10, 
+        probs = 1/N*ones(N);
+        store = nothing)
 
 **Arguments**
 
@@ -30,6 +31,10 @@ include("algorithm.jl")
 * `tol` : tolerance for convergence.
 * `maxiter` : maximum number of iterations of L-Shaped Method that should be implemented.
 * `probs` : vector of probabilities for each scenario (indexed by id number). Defaults to 1/N.
+
+**Keyword Arguments**
+
+* `store` : defaults to nothing. enter in string path to store L-Shaped information: x, E and e (and their local summands), w, theta
 """
 function L_Shaped_Algorithm(subproblem_generator, 
                             v_dict, 

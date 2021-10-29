@@ -67,6 +67,9 @@ function update_gradients_nac!(model, varstructs)
     
     for var in keys(varstructs)
         name = varstructs[var].name
+        
+        cost = varstructs[var].cost
+        println("$(name), $(cost)")
     
         varstructs[var].gradient = JuMP.dual(JuMP.FixRef(JuMP.variable_by_name(model,name)))
         
@@ -399,17 +402,24 @@ function setup_1st_paths!(firststage)
     
     path = firststage.store
     vardict = firststage.variables
+    nvars = vardict.count
     
-    header = [];
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
     for vname in keys(vardict)
-        push!(header, vname)
+        
+        varinfo = vardict[vname]
+        index = varinfo.index
+        
+        header[index] = vname
+        
     end
     
     nvars = length(header)
     
     df = DataFrame()
-    
     dfe = DataFrame(econst = Float64[])
+    dfwt = DataFrame(w = Float64[], theta = Float64[])
     
     for i = 1:nvars
         insertcols!(df, i, Symbol(header[i])=>Float64[])
@@ -420,10 +430,12 @@ function setup_1st_paths!(firststage)
     xcsv = string(path, "x.csv")
     Ecsv = string(path, "E.csv")
     ecsv = string(path, "ek.csv")
+    wtcsv = string(path, "w_theta.csv")
     
     CSV.write(xcsv, df)
     CSV.write(Ecsv, df)
     CSV.write(ecsv, dfe)
+    CSV.write(wtcsv, dfwt)
     
     return
 end
@@ -477,6 +489,125 @@ function store_e!(firststage, e_k)
     
 end
 
+function store_w_theta!(firststage, w, theta)
+    
+    path = firststage.store
+    wtcsv = string(path, "w_theta.csv")
+    
+    open(wtcsv, "a") do io
+        write(io, "$(w), $(theta) \n")
+    end
+    
+    return
+    
+end
+
+function setup_2nd_paths!(path, subproblem)
+    
+    vardict = subproblem.variableinfo
+    sid = subproblem.id
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vid in keys(vardict)
+        
+        vname = vardict[vid].name
+        index = vardict[vid].index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    df = DataFrame()
+    dfe = DataFrame(econst = Float64[])
+    
+    for i = 1:nvars
+        insertcols!(df, i, Symbol(header[i])=>Float64[])
+    end
+        
+    Ecsv = string(path, "scen_$(sid)/E.csv")
+    ekcsv = string(path, "scen_$(sid)/ek.csv")
+    
+    CSV.write(Ecsv, df)
+    CSV.write(ekcsv, dfe)   
+    
+    return
+end
+
+function setup_scen_path!(path::String, sid::Int64)
+    
+    scenpath = string(path, "scen_$(sid)/")
+    
+    mkdir(scenpath)
+    
+    return 
+    
+end
+
+function store_Es_es!(path, subproblem, pi_k, h_k)
+           
+    prob = subproblem.probability
+    vardict = subproblem.variableinfo
+    sid = subproblem.id
+    nvars = vardict.count
+    
+    # initialize E vector
+    Evec = Vector{Float64}(undef, nvars) 
+    
+    for var in keys(vardict)
+        vind = vardict[var].index
+        grad2 = vardict[var].gradient
+        cost = vardict[var].cost
+        
+        # this is using the NAC method
+        Evec[vind] = prob*(cost - grad2)
+        
+    end
+    
+    # now it's e's turn
+    #=m = subproblem.model
+    nc = contoidx.count
+    PIk = Array{Float64}(undef, nc)
+
+    for (F,S) in list_of_constraint_types(m)
+        for con in all_constraints(m,F,S)
+           if occursin("AffExpr",string(F))
+                #f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
+                #conidxtoref[index] = (F,S,f,con, con.index.value)
+                idx = con.index.value
+                dual = JuMP.dual(con)
+                PIk[contoidx[idx]] = dual
+           end
+        end
+    end=#
+    
+    #TODO have this not based on firststage stuff
+    e_k = prob*dot(pi_k,h_k)
+    
+    Ecsv = string(path, "scen_$(sid)/E.csv")
+    ekcsv = string(path, "scen_$(sid)/ek.csv")
+    
+    sE = string(Evec)
+    n = length(string(Evec))
+
+    sE = sE[2:n-1]
+    open(Ecsv, "a") do io
+        write(io, "$(sE) \n")
+    end 
+            
+    open(ekcsv, "a") do io
+        write(io, "$(e_k) \n")
+    end
+    
+    
+    return
+    
+end
+
+
 function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6, niter = 10)
         
     x = 0
@@ -507,8 +638,22 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
 
         #        * solve second stage problems
         # done separately to eventually parallelize 
-        for i in keys(firststage.subproblems)  
-            solve_sub_and_update!(firststage.subproblems[i])
+        
+        for sid in keys(firststage.subproblems)  
+            solve_sub_and_update!(firststage.subproblems[sid])
+            
+            if firststage.store!= nothing
+                
+                #I will have to store this locally at some point...
+                path = firststage.store
+                
+                if i == 1
+                    setup_scen_path!(path, sid)
+                    
+                    setup_2nd_paths!(path, firststage.subproblems[sid])
+                end
+                                                   
+            end
         end
 
         #        * get simplex multipliers, update E and e
@@ -528,6 +673,13 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
 
         #update PI
         PI = compute_PI(firststage, contoidx)
+        
+        #this needs to be redesigned. e_k in the second stage needs to be recorded first in the fashion of E
+        #this requires restructuring how contoidx, pi, and h are constructed in the second stage.
+        #this will probably take a full day of work but will be needed to do the async stuff.
+        for sid in keys(firststage.subproblems)
+            store_Es_es!(firststage.store, firststage.subproblems[sid], PI[sid,:], h[sid,:])
+        end
 
         #update e_k
         e_k = compute_e(firststage,h,PI)
@@ -547,6 +699,15 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
         end
 
         w = e_k - dot(E,x)
+        
+        if firststage.store != nothing
+            if addtheta == 0
+                store_w_theta!(firststage, w, -Inf)
+            elseif addtheta == 1
+                store_w_theta!(firststage, w, theta)
+            end
+        end
+        
         println("w = $(w)")
         if addtheta == 1
             if theta >= w - tol
