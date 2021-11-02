@@ -29,6 +29,21 @@ mutable struct Subproblems
     objective_value::Any
 end
 
+mutable struct SubproblemsNew
+    id::Int64
+    model::Any
+    probability::Float64
+    variableinfo::Any
+    linkedconstraintinfo::Any
+    idxtocon::Dict
+    h::Any
+    Ek::Any
+    ek::Any
+    vnametoind::Dict
+    arrays::Any
+    objective_value::Any
+end
+
 mutable struct Arrays
     Ae::Any
     Al::Any

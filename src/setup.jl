@@ -238,6 +238,61 @@ function ConToIdx(m)
     
 end
 
+#creates a constraint number and lists the constraint in it.
+function IdxToCon(m)
+    
+    idxtocon = Dict()
+
+    count = 0
+
+    for (F,S) in list_of_constraint_types(m)
+        for con in all_constraints(m,F,S)
+           if occursin("AffExpr",string(F))
+                count += 1
+                idxtocon[count] = con
+           end
+        end
+    end
+    
+    return idxtocon
+    
+end
+
+function compute_h_new(model,idxtocon)
+
+    nc = idxtocon.count
+    
+    h = Array{Float64}(undef, nc)
+    
+    for idx in keys(idxtocon)
+        
+        con = idxtocon[idx]
+        
+        #this is a placeholder, as below is obviously poor coding practice.
+        ctype = string(typeof(con))
+        println(con)
+        
+        if occursin("EqualTo", ctype)
+            val = constraint_object(con).set.value
+                h[idx] = val
+        elseif occursin("GreaterThan", ctype)
+            val = constraint_object(con).set.lower
+            h[idx] = val
+        elseif occursin("LessThan", ctype)
+            val = constraint_object(con).set.upper
+            h[idx] = val
+        elseif occursin("Interval", ctype)
+            val = constraint_object(con).set.upper
+            h[idx] = val
+        else
+            println(con)
+            println("Add ", ctype, " to hvars.")
+        end
+    end
+    
+    return h
+end
+
 function compute_h(models, contoidx)
     
     ns = models.count
@@ -269,7 +324,7 @@ function compute_h(models, contoidx)
                         #end
                         val = constraint_object(con).set.upper
                         h[sid, contoidx[idx]] = val
-                        #println("$(idx) Add ", S, " to fsasdinitialization.")
+                        #println("$(idx) Add ", S, " to initialization.")
                     else
                         println(con)
                         println("Add ", S, " to hvars.")
@@ -283,7 +338,7 @@ function compute_h(models, contoidx)
     
 end
 
-function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*ones(N), store = 0)
+function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*ones(N), store = nothing)
     
     models = Dict()
 
@@ -320,5 +375,44 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
     update_second_index!(firststage)
     
     return firststage, contoidx, h
+    
+end
+
+
+function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs = 1/N*ones(N), store = nothing)
+    
+    subprob = Dict()
+
+    for i = 1:N
+        model = subproblem_generator(i);
+        
+        idxtocon = IdxToCon(model)
+    
+        h = compute_h_new(model, idxtocon)
+    
+        model, varstructs, linkedcons, vnametoidx, arrays = initialize(model, v_dict)
+
+        #add descriptions to these.
+        subprob[i] = SubproblemsNew(i, model, probs[i], varstructs, linkedcons, idxtocon, 
+                                            h, nothing, nothing, vnametoidx, arrays, nothing)
+
+    end
+
+    firststagevars = Dict()
+
+    for index in 1:length(v_dict[1])
+        var = v_dict[1][index]
+        # very temporary
+        #firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, x_init[1], var[4], var[2], var[3], nothing)
+        firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3], nothing)
+
+    end
+
+    firststage = FirstStageInfo(firststagevars, subprob, store);
+    
+    #temporary? ideally this would be when the second stage is made.
+    update_second_index!(firststage)
+    
+    return firststage
     
 end
