@@ -55,4 +55,24 @@ function L_Shaped_Algorithm(subproblem_generator,
     
 end
 
+
+function L_Shaped_Algorithm_new(subproblem_generator, 
+                            v_dict, 
+                            N, 
+                            master_generator, 
+                            tol = 1e-6, 
+                            maxiter=10, 
+                            probs = 1/N*ones(N);
+                            store = nothing)
+        
+    firststage = make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store);
+    
+    fs = master_generator()
+    
+    ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter)
+    
+    return x, firststage, fs, ittime, niter
+    
+end
+
 end # module

@@ -316,6 +316,43 @@ function adjust_h(firststage, contoidx, h)
     
 end
 
+#TODO since this only applies to interval constraints, classify constraints in subproblem by type, so it
+# does not have to parse through every constraint.
+function adjust_h_new!(subproblem)
+
+    idxtocon = subproblem.idxtocon
+    h = subproblem.h
+    
+    for idx in keys(idxtocon)
+        
+        con = idxtocon[idx]
+        
+        #this is a placeholder, as below is obviously poor coding practice.
+        ctype = string(typeof(con))
+        println(con)
+        
+        #do nothing if not an interval constraint. If something weird is happening say to add constraint type.
+        if occursin("EqualTo", ctype)
+        elseif occursin("GreaterThan", ctype)
+        elseif occursin("LessThan", ctype)
+        # my suspition right now is that the below is solver dependent. Works fine in Gurobi, but issues elsewhere.
+        elseif occursin("Interval", ctype)
+            if dual(con) > 0
+                h[idx] = constraint_object(con).set.lower
+            else
+                h[idx] = constraint_object(con).set.upper
+            end
+        else
+            println(con)
+            println("Add ", ctype, " to hvars.")
+        end
+    end
+    
+    subproblem.h = h
+    
+    return
+end
+
 function compute_e(firststage, h, PI)
         
     e_k = 0.0;
@@ -729,6 +766,294 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
     println("L-Shaped Algorithm Failed to converge in $(niter) iterations.")
     
     return x, firststage, fs, contoidx, h, niter
+    
+end
+
+function compute_Ek_new!(subproblem)
+    
+    prob = subproblem.probability
+    vardict = subproblem.variableinfo
+    nvars = vardict.count
+    
+    # initialize E vector
+    Evec = Vector{Float64}(undef, nvars) 
+    
+    for var in keys(vardict)
+        vind = vardict[var].index
+        grad2 = vardict[var].gradient
+        cost = vardict[var].cost
+        
+        # this is using the NAC method
+        Evec[vind] = prob*(cost - grad2)
+        
+    end
+    
+    subproblem.Ek = Evec
+    
+    return
+    
+end
+
+function compute_ek_new!(subproblem)
+    
+    prob = subproblem.probability
+    idxtocon = subproblem.idxtocon
+    h = subproblem.h
+    
+    ek = 0.0;
+    
+    for idx in keys(idxtocon)
+        
+        con = idxtocon[idx]
+        dual = JuMP.dual(con)
+        
+        ek += h[idx]*dual
+        
+    end
+
+    subproblem.ek = prob*ek
+    
+    return
+    
+end
+
+function store_Ek_sub!(subproblem, path)
+    
+    sid = subproblem.id
+    Evec = subproblem.Ek
+    
+    Ecsv = string(path, "scen_$(sid)/E.csv")
+    
+    sE = string(Evec)
+    n = length(string(Evec))
+
+    sE = sE[2:n-1]
+    open(Ecsv, "a") do io
+        write(io, "$(sE) \n")
+    end 
+    
+    return
+    
+end
+
+function store_ek_sub!(subproblem, path)
+    
+    sid = subproblem.id
+    ek = subproblem.ek
+    
+    ecsv = string(path, "scen_$(sid)/ek.csv")
+    
+    open(ecsv, "a") do io
+        write(io, "$(ek) \n")
+    end
+    
+    return
+    
+end
+    
+    
+function store_Es_es!(path, subproblem, pi_k, h_k)
+           
+    prob = subproblem.probability
+    vardict = subproblem.variableinfo
+    sid = subproblem.id
+    nvars = vardict.count
+    
+    # initialize E vector
+    Evec = Vector{Float64}(undef, nvars) 
+    
+    for var in keys(vardict)
+        vind = vardict[var].index
+        grad2 = vardict[var].gradient
+        cost = vardict[var].cost
+        
+        # this is using the NAC method
+        Evec[vind] = prob*(cost - grad2)
+        
+    end
+    
+    # now it's e's turn
+    #=m = subproblem.model
+    nc = contoidx.count
+    PIk = Array{Float64}(undef, nc)
+
+    for (F,S) in list_of_constraint_types(m)
+        for con in all_constraints(m,F,S)
+           if occursin("AffExpr",string(F))
+                #f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
+                #conidxtoref[index] = (F,S,f,con, con.index.value)
+                idx = con.index.value
+                dual = JuMP.dual(con)
+                PIk[contoidx[idx]] = dual
+           end
+        end
+    end=#
+    
+    #TODO have this not based on firststage stuff
+    e_k = prob*dot(pi_k,h_k)
+    
+    Ecsv = string(path, "scen_$(sid)/E.csv")
+    ekcsv = string(path, "scen_$(sid)/ek.csv")
+    
+    sE = string(Evec)
+    n = length(string(Evec))
+
+    sE = sE[2:n-1]
+    open(Ecsv, "a") do io
+        write(io, "$(sE) \n")
+    end 
+            
+    open(ekcsv, "a") do io
+        write(io, "$(e_k) \n")
+    end
+    
+    
+    return
+    
+end
+
+#as opposed to get_El_from_file to be made
+function get_El_from_sub!(firststage)
+    
+    subproblems = firststage.subproblems
+    nvars = firststage.variables.count
+    
+    El = zeros(nvars)
+    
+    for sid in keys(subproblems)
+        El += subproblems[sid].Ek
+    end
+    
+    return El
+    
+end
+
+function get_el_from_sub!(firststage)
+    
+    subproblems = firststage.subproblems
+    
+    el = 0.0
+    
+    for sid in keys(subproblems)
+        el += subproblems[sid].ek
+    end
+    
+    return el
+    
+end
+
+function iterate_L_new(firststage, fs, v_dict, addtheta = 0, tol = 1e-6, niter = 10)
+        
+    x = 0
+    
+    cost = get_cost_vector(firststage, fs)
+    
+    for i = 1:niter
+
+        # step 1 set v = v+1 and solve first stage problem.
+        println("Iteration $(i)")
+
+        optimize!(fs)
+
+        update_first_value_L!(firststage, fs)
+        
+        if firststage.store != nothing
+        
+            if i == 1
+                setup_1st_paths!(firststage)
+            end
+            
+            store_x!(firststage)
+            
+        end
+
+        # step 3 * update x-variables in second stage
+        update_second_value!(firststage)
+
+        #        * solve second stage problems
+        # done separately to eventually parallelize 
+        
+        for sid in keys(firststage.subproblems)  
+            solve_sub_and_update!(firststage.subproblems[sid])
+            
+            if firststage.store!= nothing
+                
+                #I will have to store this locally at some point...
+                path = firststage.store
+                
+                if i == 1
+                    setup_scen_path!(path, sid)
+                    
+                    setup_2nd_paths!(path, firststage.subproblems[sid])
+                end
+                                                   
+            end
+        end
+
+        #        * get simplex multipliers, update E and e
+        # update E
+        update_first_gradient!(firststage)
+
+        grad = get_grad_vector(firststage)
+        
+        for sid in keys(firststage.subproblems)  
+            subproblem = firststage.subproblems[sid]
+            adjust_h_new!(subproblem) #done
+            #see current Ek_ek folder)
+            compute_Ek_new!(subproblem) #done
+            compute_ek_new!(subproblem) #done
+            
+            if firststage.store != nothing
+                store_Ek_sub!(subproblem, firststage.store) #done
+                store_ek_sub!(subproblem, firststage.store) #done
+            end
+        end
+                    
+        #E = cost - grad
+        #get it from subproblems. In async make get_Ek_from_file function
+        El = get_El_from_sub!(firststage) #done
+        el = get_el_from_sub!(firststage) #done
+
+        x = get_value_vector(firststage)
+    
+        if addtheta == 1
+            theta = JuMP.value(JuMP.variable_by_name(fs, "theta"))
+            println("theta = $(theta)")
+        end
+
+        w = el - dot(El,x)
+        
+        if firststage.store != nothing
+            store_E!(firststage, El)
+            store_e!(firststage, el)
+            if addtheta == 0
+                store_w_theta!(firststage, w, -Inf)
+            elseif addtheta == 1
+                store_w_theta!(firststage, w, theta)
+            end
+        end
+        
+        println("w = $(w)")
+        if addtheta == 1
+            if theta >= w - tol
+                println("algorithm converged.")
+                println("final x = $(x)")
+                return x, firststage, fs, i
+            end
+        end
+        
+        if addtheta == 0
+            fs = add_theta_to_objective!(fs)
+            addtheta = 1
+        end
+
+        fs = add_constraint_to_objective!(fs, El, el, v_dict)
+
+    end
+    
+    println("L-Shaped Algorithm Failed to converge in $(niter) iterations.")
+    
+    return x, firststage, fs, niter
     
 end
 
