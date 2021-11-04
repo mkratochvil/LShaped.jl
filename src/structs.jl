@@ -23,6 +23,7 @@ mutable struct Subproblems
     model::Any
     probability::Float64
     variableinfo::Any
+    ncons::Any
     linkedconstraintinfo::Any
     vnametoind::Dict
     arrays::Any

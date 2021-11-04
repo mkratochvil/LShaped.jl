@@ -75,13 +75,16 @@ function make_VariableInfo(vardict, vartocost, condict)
     varstructs = Dict()
     
     for vname in keys(vardict[1])
+        println("......making info for $(vname)...")
         vid = vardict[1][vname]
         conval=Dict();
         # note vartocost may be obsolete. directly implement in class?
-        cost = vartocost[vid]
+        cost = 0.0;#vartocost[vid]
         # note this may change. I seek out the constraints in which variables appear iteratively
         # better to do this by constraint or by variable?
-        for cid in keys(condict)
+        # ^^ 100% correct. this turned out to be a bottleneck for wsgep288 (30 second ea => 75 min/scen)
+        # need to fix if NOT using nac to update E.
+        #=for cid in keys(condict)
             if occursin("MathOptInterface.ScalarAffineFunction{Float64}", string(typeof(condict[cid][3])))
                 for term in 1:length(condict[cid][3].terms)
                     if vid == condict[cid][3].terms[term].variable_index.value
@@ -101,8 +104,9 @@ function make_VariableInfo(vardict, vartocost, condict)
             else
                 #println(typeof(condict[cid][3]))
             end
-        end
-        varstructs[vid] = LocalVariableInfo(vid, vname, nothing, cost, conval, nothing, nothing)
+        end=#
+        #varstructs[vid] = LocalVariableInfo(vid, vname, nothing, cost, conval, nothing, nothing)
+        varstructs[vid] = LocalVariableInfo(vid, vname, nothing, cost, nothing, 0.0, nothing)
     end
 
     return varstructs
@@ -173,16 +177,20 @@ end
 
 function initialize(model, vnames)
         
+    println("...making stage_name_idx...")
     vardict = stage_name_idx(model, vnames)
     
     #vrm1, vindtoref, varcost, condict, Ae, Al, Ag, Ie, Il, Ig = make_dicts_and_arrays(model);
+    println("...Making dicts and arrays...")
     vrm1, vindtoref, varcost, condict = make_dicts_and_arrays(model);
     
+    println("...making variable_info...") #TODO fix the bottleneck here. 
     varstructs = make_VariableInfo(vardict, varcost, condict);
     
     #arrays = create_eq_lt_gt_arrays(m,condict,vindtoref, varstructs)
     
-    linkedcons = make_LinkedConstraintInfo(varstructs, condict)
+    #println("...making constraint_info...")
+    #linkedcons = make_LinkedConstraintInfo(varstructs, condict)
     
     #for i in 1:length(x_init)
     #    varstructs[i].value = x_init[i]
@@ -195,7 +203,7 @@ function initialize(model, vnames)
     
     #arrays = Arrays(Ae, Al, Ag, Ie, Il, Ig)
     
-    return model, varstructs, linkedcons, vardict[1], 0
+    return model, varstructs, vardict[1], 0
     
 end
 
@@ -226,15 +234,18 @@ function ConToIdx(m)
 
     for (F,S) in list_of_constraint_types(m)
         for con in all_constraints(m,F,S)
-           if occursin("AffExpr",string(F))
+           #if occursin("AffExpr",string(F))
                 count += 1
                 # this may have to change because of how JuMP stores things. we'll see.
-                contoidx[con.index.value] = count
-           end
+                # values are being overwritten in 1.6 because of the way MOI Indexes things
+                #contoidx[con.index.value] = count
+                contoidx[(F,S)] = count
+           #end
         end
     end
+    println("contoidx og count = $(count).")
     
-    return contoidx
+    return contoidx, count
     
 end
 
@@ -270,7 +281,6 @@ function compute_h_new(model,idxtocon)
         
         #this is a placeholder, as below is obviously poor coding practice.
         ctype = string(typeof(con))
-        println(con)
         
         if occursin("EqualTo", ctype)
             val = constraint_object(con).set.value
@@ -293,10 +303,11 @@ function compute_h_new(model,idxtocon)
     return h
 end
 
-function compute_h(models, contoidx)
+function compute_h(models, contoidx, count)
     
     ns = models.count
-    nc = contoidx.count
+    nc = count
+    println("count = $(nc)")
     
     h = Array{Float64}(undef, ns, nc)
     
@@ -305,17 +316,17 @@ function compute_h(models, contoidx)
         
         for (F,S) in list_of_constraint_types(m)
             for con in all_constraints(m,F,S)
-               if occursin("AffExpr",string(F))
+               #if occursin("AffExpr",string(F))
                     idx = con.index.value
                     if occursin("EqualTo", string(S))
                         val = constraint_object(con).set.value
-                        h[sid, contoidx[idx]] = val
+                        h[sid, contoidx[(F,S)]] = val
                     elseif occursin("GreaterThan", string(S))
                         val = constraint_object(con).set.lower
-                        h[sid, contoidx[idx]] = val
+                        h[sid, contoidx[(F,S)]] = val
                     elseif occursin("LessThan", string(S))
                         val = constraint_object(con).set.upper
-                        h[sid, contoidx[idx]] = val
+                        h[sid, contoidx[(F,S)]] = val
                     elseif occursin("Interval", string(S))
                         #println(con)
                         #if idx == 3455
@@ -323,13 +334,13 @@ function compute_h(models, contoidx)
                         #    println(fnto(constraint_object(con).set))
                         #end
                         val = constraint_object(con).set.upper
-                        h[sid, contoidx[idx]] = val
+                        h[sid, contoidx[(F,S)]] = val
                         #println("$(idx) Add ", S, " to initialization.")
                     else
                         println(con)
                         println("Add ", S, " to hvars.")
                     end
-                end
+                #end
             end
         end
     end
@@ -345,19 +356,25 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
     for i = 1:N
         models[i] = subproblem_generator(i);
     end
-
-    contoidx = ConToIdx(models[1])
-    
-    h = compute_h(models, contoidx)
     
     subprob = Dict()
 
     for i = 1:N
-        model, varstructs, linkedcons, vnametoidx, arrays = initialize(models[i], v_dict)
+        model, varstructs, vnametoidx, arrays = initialize(models[i], v_dict)
+        
+        #very temporary
+        
+        update_constraint_values_nac!(model, varstructs)
+        
+        contoidx, count = ConToIdx(model)
 
-        subprob[i] = Subproblems(i, model, probs[i], varstructs, linkedcons, vnametoidx, arrays, nothing)
+        subprob[i] = Subproblems(i, model, probs[i], varstructs, count, nothing, vnametoidx, arrays, nothing)
 
     end
+    
+    contoidx, count = ConToIdx(subprob[1].model)
+    
+    h = compute_h(models, contoidx, count)
 
     firststagevars = Dict()
 
@@ -388,12 +405,15 @@ function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs = 1/N
         
         idxtocon = IdxToCon(model)
     
+        println("computing h for subproblem $(i)...")
         h = compute_h_new(model, idxtocon)
     
-        model, varstructs, linkedcons, vnametoidx, arrays = initialize(model, v_dict)
+        println("Initializing subproblem $(i)...")
+        model, varstructs, vnametoidx, arrays = initialize(model, v_dict)
 
         #add descriptions to these.
-        subprob[i] = SubproblemsNew(i, model, probs[i], varstructs, linkedcons, idxtocon, 
+        println("Creating subprob[$(i)] struct...")
+        subprob[i] = SubproblemsNew(i, model, probs[i], varstructs, nothing, idxtocon, 
                                             h, nothing, nothing, vnametoidx, arrays, nothing)
 
     end
