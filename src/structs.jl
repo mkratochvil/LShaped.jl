@@ -23,7 +23,23 @@ mutable struct Subproblems
     model::Any
     probability::Float64
     variableinfo::Any
+    ncons::Any
     linkedconstraintinfo::Any
+    vnametoind::Dict
+    arrays::Any
+    objective_value::Any
+end
+
+mutable struct SubproblemsNew
+    id::Int64
+    model::Any
+    probability::Float64
+    variableinfo::Any
+    linkedconstraintinfo::Any
+    idxtocon::Dict
+    h::Any
+    Ek::Any
+    ek::Any
     vnametoind::Dict
     arrays::Any
     objective_value::Any
@@ -42,6 +58,7 @@ end
 mutable struct FirstStageInfo
     variables::Dict # dict from variable string name to FirstStageVariableInfo 
     subproblems::Dict
+    store::Union{String,Nothing}
     #probability::Float64
     #variableinfo::Any
     #linkedconstraintinfo::Any
