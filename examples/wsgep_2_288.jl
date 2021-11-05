@@ -218,7 +218,7 @@ function variable_dict_primal(varlist, x)
             
             # for some reason, the lower bound on these variables is not showing...I'm not sure why.
             lb = 0
-            ub = 100.0
+            ub = Inf
             #if has_lower_bound(var) == 1
             #    lb = lower_bound(var)
             #end

@@ -233,14 +233,17 @@ function ConToIdx(m)
     count = 0
 
     for (F,S) in list_of_constraint_types(m)
+        innercount = 0
         for con in all_constraints(m,F,S)
-           #if occursin("AffExpr",string(F))
+            #exists to make sure nac constraints do not get added.
+           if occursin("AffExpr",string(F))
+                innercount +=1
                 count += 1
                 # this may have to change because of how JuMP stores things. we'll see.
                 # values are being overwritten in 1.6 because of the way MOI Indexes things
                 #contoidx[con.index.value] = count
-                contoidx[(F,S)] = count
-           #end
+                contoidx[(F,S,innercount)] = count
+           end
         end
     end
     println("contoidx og count = $(count).")
@@ -315,18 +318,20 @@ function compute_h(models, contoidx, count)
         m = models[sid]
         
         for (F,S) in list_of_constraint_types(m)
+            innercount = 0
             for con in all_constraints(m,F,S)
-               #if occursin("AffExpr",string(F))
+                innercount += 1
+               if occursin("AffExpr",string(F))
                     idx = con.index.value
                     if occursin("EqualTo", string(S))
                         val = constraint_object(con).set.value
-                        h[sid, contoidx[(F,S)]] = val
+                        h[sid, contoidx[(F,S,innercount)]] = val
                     elseif occursin("GreaterThan", string(S))
                         val = constraint_object(con).set.lower
-                        h[sid, contoidx[(F,S)]] = val
+                        h[sid, contoidx[(F,S,innercount)]] = val
                     elseif occursin("LessThan", string(S))
                         val = constraint_object(con).set.upper
-                        h[sid, contoidx[(F,S)]] = val
+                        h[sid, contoidx[(F,S,innercount)]] = val
                     elseif occursin("Interval", string(S))
                         #println(con)
                         #if idx == 3455
@@ -334,13 +339,13 @@ function compute_h(models, contoidx, count)
                         #    println(fnto(constraint_object(con).set))
                         #end
                         val = constraint_object(con).set.upper
-                        h[sid, contoidx[(F,S)]] = val
+                        h[sid, contoidx[(F,S,innercount)]] = val
                         #println("$(idx) Add ", S, " to initialization.")
                     else
                         println(con)
                         println("Add ", S, " to hvars.")
                     end
-                #end
+                end
             end
         end
     end
@@ -357,6 +362,10 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
         models[i] = subproblem_generator(i);
     end
     
+    contoidx, count = ConToIdx(models[1])
+    
+    h = compute_h(models, contoidx, count)
+    
     subprob = Dict()
 
     for i = 1:N
@@ -366,7 +375,7 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
         
         update_constraint_values_nac!(model, varstructs)
         
-        contoidx, count = ConToIdx(model)
+        #contoidx, count = ConToIdx(model)
 
         subprob[i] = Subproblems(i, model, probs[i], varstructs, count, nothing, vnametoidx, arrays, nothing)
 

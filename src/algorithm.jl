@@ -282,8 +282,10 @@ function adjust_h(firststage, contoidx, h)
         m = models[sid].model
         
         for (F,S) in list_of_constraint_types(m)
+            innercount = 0
             for con in all_constraints(m,F,S)
-               #if occursin("AffExpr",string(F))
+                innercount += 1
+               if occursin("AffExpr",string(F))
                     idx = con.index.value
                     if occursin("EqualTo", string(S))
                         #val = constraint_object(con).set.value
@@ -304,15 +306,15 @@ function adjust_h(firststage, contoidx, h)
                         #println("dual = ", dual(con))
                         #h[sid, contoidx[idx]] = val
                         if dual(con) > 0
-                            h[sid, contoidx[(F,S)]] = constraint_object(con).set.lower
+                            h[sid, contoidx[(F,S,innercount)]] = constraint_object(con).set.lower
                         else
-                            h[sid, contoidx[(F,S)]] = constraint_object(con).set.upper
+                            h[sid, contoidx[(F,S,innercount)]] = constraint_object(con).set.upper
                         end
                     else
                         println(con)
                         println("Add ", S, " to hvars.")
                     end
-                #end
+                end
             end
         end
     end
@@ -371,7 +373,8 @@ end
 function compute_PI(firststage, contoidx)
         
     N = firststage.subproblems.count
-    nc = firststage.subproblems[1].ncons
+    #nc = firststage.subproblems[1].ncons
+    nc = contoidx.count
     println(nc)
     PI = Array{Float64}(undef,N, nc)
     for i = 1:N
@@ -381,15 +384,17 @@ function compute_PI(firststage, contoidx)
 
         count = 0
         for (F,S) in list_of_constraint_types(m)
+            innercount = 0
             for con in all_constraints(m,F,S)
-               #if occursin("AffExpr",string(F))
+                innercount+=1
+               if occursin("AffExpr",string(F))
                     #f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
                     #conidxtoref[index] = (F,S,f,con, con.index.value)
                     idx = con.index.value
                     dual = JuMP.dual(con)
-                    PI[i, contoidx[(F,S)]] = dual
+                    PI[i, contoidx[(F,S,innercount)]] = dual
                 count += 1
-               #end
+               end
             end
         end
         println(count)
@@ -798,6 +803,7 @@ function compute_Ek_new!(subproblem)
         vind = vardict[var].index
         grad2 = vardict[var].gradient
         cost = vardict[var].cost
+        println(var, " ", cost)
         
         # this is using the NAC method
         Evec[vind] = prob*(cost - grad2)
@@ -1042,10 +1048,14 @@ function iterate_L_new(firststage, fs, v_dict, addtheta = 0, tol = 1e-6, niter =
         #E = cost - grad
         #get it from subproblems. In async make get_Ek_from_file function
         println("Updating First stage stuff...")
+        #TODO change this to gradient, as two-stage problems have a certain first stage cost ONLY
         El = get_El_from_sub!(firststage) #done
+        El = cost + El
         println("El = $(El)")
         el = get_el_from_sub!(firststage) #done
         println("el = $(el)")
+        
+       
 
         x = get_value_vector(firststage)
         println("x = $(x)")
