@@ -88,7 +88,7 @@ function solve_sub_and_update!(subproblem)
     #update_constraint_values!(varstructs,linkedcons)
     update_constraint_values_nac!(model, varstructs)
     
-    println("solving subproblem: $(subproblem.id)")
+    println("...Solving subproblem: $(subproblem.id)...")
     optimize!(model)
     update_gradients_nac!(model, varstructs)
     
@@ -271,6 +271,7 @@ function get_objective_value(firststage)
     
 end
 
+#TODO make a dict so we know which constraints to adjust.
 function adjust_h(firststage, contoidx, h)
         
     models = firststage.subproblems
@@ -288,23 +289,9 @@ function adjust_h(firststage, contoidx, h)
                if occursin("AffExpr",string(F))
                     idx = con.index.value
                     if occursin("EqualTo", string(S))
-                        #val = constraint_object(con).set.value
-                        #h[sid, contoidx[idx]] = val
                     elseif occursin("GreaterThan", string(S))
-                        #val = constraint_object(con).set.lower
-                        #h[sid, contoidx[idx]] = val
                     elseif occursin("LessThan", string(S))
-                        #val = constraint_object(con).set.upper
-                        #h[sid, contoidx[idx]] = val
                     elseif occursin("Interval", string(S))
-                        #val = constraint_object(con).set.upper
-                        #for key in keys(constraint_object(con).func.terms)
-                        #    #println("$(key), $(JuMP.value(key))")
-                        #    varval
-                        #end
-                        #println("hval = ", h[sid, contoidx[idx]])
-                        #println("dual = ", dual(con))
-                        #h[sid, contoidx[idx]] = val
                         if dual(con) > 0
                             h[sid, contoidx[(F,S,innercount)]] = constraint_object(con).set.lower
                         else
@@ -373,9 +360,7 @@ end
 function compute_PI(firststage, contoidx)
         
     N = firststage.subproblems.count
-    #nc = firststage.subproblems[1].ncons
     nc = contoidx.count
-    println(nc)
     PI = Array{Float64}(undef,N, nc)
     for i = 1:N
         subproblem = firststage.subproblems[i]
@@ -388,8 +373,6 @@ function compute_PI(firststage, contoidx)
             for con in all_constraints(m,F,S)
                 innercount+=1
                if occursin("AffExpr",string(F))
-                    #f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
-                    #conidxtoref[index] = (F,S,f,con, con.index.value)
                     idx = con.index.value
                     dual = JuMP.dual(con)
                     PI[i, contoidx[(F,S,innercount)]] = dual
@@ -435,13 +418,11 @@ end
 function update_first_value_L!(firststage, fs)
         
     for vname in keys(firststage.variables)
-        #println(vname)
+        
         varinfo = firststage.variables[vname]
-        #println(varinfo)
         name = varinfo.name
         
         varinfo.value = JuMP.value(JuMP.variable_by_name(fs, name))
-        #println(name, " ", varinfo.value)
     end
     
     return
@@ -658,12 +639,14 @@ function store_Es_es!(path, subproblem, pi_k, h_k)
 end
 
 
-function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6, niter = 10)
+function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, verbose)
         
     x = 0
     
     cost = get_cost_vector(firststage, fs)
-    println("cost = $(cost)")
+    if verbose == 1
+        println("cost = $(cost)")
+    end
     
     for i = 1:niter
 
@@ -712,21 +695,28 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
         update_first_gradient!(firststage)
         
         grad = get_grad_vector(firststage)
-        println("grad = $(grad)")
+        if verbose == 1
+            println("grad = $(grad)")
+        end
                 
         h = adjust_h(firststage, contoidx, h)
-        println("h = $(h)")
+        if verbose == 1
+            println("h = $(h)")
+        end
 
         E = cost - grad
         if firststage.store != nothing
             store_E!(firststage, E)
         end
-        println("E = $(E)")
+        if verbose == 1
+            println("E = $(E)")
+        end
 
 
         #update PI
         PI = compute_PI(firststage, contoidx)
-        println("PI = $(PI)")
+        #printing this directly is not recommended
+        #println("PI = $(PI)")
         
         #this needs to be redesigned. e_k in the second stage needs to be recorded first in the fashion of E
         #this requires restructuring how contoidx, pi, and h are constructed in the second stage.
@@ -740,7 +730,9 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
 
         #update e_k
         e_k = compute_e(firststage,h,PI)
-        println("e = $(e_k)")
+        if verbose == 1
+            println("e = $(e_k)")
+        end
         
         if firststage.store != nothing
             store_e!(firststage, e_k)
@@ -748,7 +740,9 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta = 0, tol = 1e-6
 
 
         x = get_value_vector(firststage)
-        println("x = $(x)")
+        if verbose == 1
+            println("x = $(x)")
+        end
     
 
         if addtheta == 1
@@ -803,7 +797,6 @@ function compute_Ek_new!(subproblem)
         vind = vardict[var].index
         grad2 = vardict[var].gradient
         cost = vardict[var].cost
-        println(var, " ", cost)
         
         # this is using the NAC method
         Evec[vind] = prob*(cost - grad2)
@@ -964,12 +957,14 @@ function get_el_from_sub!(firststage)
     
 end
 
-function iterate_L_new(firststage, fs, v_dict, addtheta = 0, tol = 1e-6, niter = 10)
+function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
         
     x = 0
     
     cost = get_cost_vector(firststage, fs)
-    println("cost = $(cost)")
+    if verbose == 1
+        println("cost = $(cost)")
+    end
     
     for i = 1:niter
 
@@ -978,23 +973,31 @@ function iterate_L_new(firststage, fs, v_dict, addtheta = 0, tol = 1e-6, niter =
 
         optimize!(fs)
 
-        println("Updating first value...")
+        if verbose == 1
+            println("Updating first value...")
+        end
         update_first_value_L!(firststage, fs)
         
         if firststage.store != nothing
         
             if i == 1
-                println("Setting up First Stage paths...")
+                if verbose == 1
+                    println("Setting up First Stage paths...")
+                end
                 setup_1st_paths!(firststage)
             end
             
-            println("Storing x...")
+            if verbose == 1
+                println("Storing x...")
+            end
             store_x!(firststage)
             
         end
 
         # step 3 * update x-variables in second stage
-        println("Updating second values...")
+        if verbose == 1
+            println("Updating second values...")
+        end
         update_second_value!(firststage)
 
         #        * solve second stage problems
@@ -1025,7 +1028,9 @@ function iterate_L_new(firststage, fs, v_dict, addtheta = 0, tol = 1e-6, niter =
         update_first_gradient!(firststage)
 
         grad = get_grad_vector(firststage)
-        println("grad = $(grad)")
+        if verbose == 1
+            println("grad = $(grad)")
+        end
         
         for sid in keys(firststage.subproblems)  
             println("For subproblem $(sid)..")
@@ -1051,14 +1056,20 @@ function iterate_L_new(firststage, fs, v_dict, addtheta = 0, tol = 1e-6, niter =
         #TODO change this to gradient, as two-stage problems have a certain first stage cost ONLY
         El = get_El_from_sub!(firststage) #done
         El = cost + El
-        println("El = $(El)")
+        if verbose == 1
+            println("El = $(El)")
+        end
         el = get_el_from_sub!(firststage) #done
-        println("el = $(el)")
+        if verbose == 1
+            println("el = $(el)")
+        end
         
        
 
         x = get_value_vector(firststage)
-        println("x = $(x)")
+        if verbose == 1
+            println("x = $(x)")
+        end
     
         if addtheta == 1
             theta = JuMP.value(JuMP.variable_by_name(fs, "theta"))

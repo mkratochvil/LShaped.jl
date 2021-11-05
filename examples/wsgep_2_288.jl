@@ -398,7 +398,7 @@ function create_first_stage()
 
     x = Vector{VariableRef}()
     for i = 1:150
-        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0, upper_bound = 100.0))
+        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0))
     end
     
     #@objective(fs, Min, sum(0.9040815000000001*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
@@ -409,5 +409,5 @@ function create_first_stage()
 end
 
 xn, firststage, fs = LShaped.L_Shaped_Algorithm(subproblem_uploader, 
-                                        v_dict, 2, create_first_stage, 1e-6, 250)#, [0.4, 0.6]; store="./bl_data/");
+                                        v_dict, 2, create_first_stage, 1e-6, 100, [0.4, 0.6]; store="./ts3_data/");
 

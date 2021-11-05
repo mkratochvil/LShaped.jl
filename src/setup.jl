@@ -75,7 +75,6 @@ function make_VariableInfo(vardict, vartocost, condict)
     varstructs = Dict()
     
     for vname in keys(vardict[1])
-        println("......making info for $(vname)...")
         vid = vardict[1][vname]
         conval=Dict();
         # note vartocost may be obsolete. directly implement in class?
@@ -310,7 +309,6 @@ function compute_h(models, contoidx, count)
     
     ns = models.count
     nc = count
-    println("count = $(nc)")
     
     h = Array{Float64}(undef, ns, nc)
     
@@ -333,14 +331,8 @@ function compute_h(models, contoidx, count)
                         val = constraint_object(con).set.upper
                         h[sid, contoidx[(F,S,innercount)]] = val
                     elseif occursin("Interval", string(S))
-                        #println(con)
-                        #if idx == 3455
-                        #    println("Success!")
-                        #    println(fnto(constraint_object(con).set))
-                        #end
                         val = constraint_object(con).set.upper
                         h[sid, contoidx[(F,S,innercount)]] = val
-                        #println("$(idx) Add ", S, " to initialization.")
                     else
                         println(con)
                         println("Add ", S, " to hvars.")
@@ -354,7 +346,7 @@ function compute_h(models, contoidx, count)
     
 end
 
-function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*ones(N), store = nothing)
+function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, verbose)
     
     models = Dict()
 
@@ -369,14 +361,11 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
     subprob = Dict()
 
     for i = 1:N
+        
         model, varstructs, vnametoidx, arrays = initialize(models[i], v_dict)
-        
-        #very temporary
-        
+                
         update_constraint_values_nac!(model, varstructs)
         
-        #contoidx, count = ConToIdx(model)
-
         subprob[i] = Subproblems(i, model, probs[i], varstructs, count, nothing, vnametoidx, arrays, nothing)
 
     end
@@ -389,10 +378,7 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
 
     for index in 1:length(v_dict[1])
         var = v_dict[1][index]
-        # very temporary
-        #firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, x_init[1], var[4], var[2], var[3], nothing)
         firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3], nothing)
-
     end
 
     firststage = FirstStageInfo(firststagevars, subprob, store);
@@ -405,7 +391,7 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs = 1/N*one
 end
 
 
-function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs = 1/N*ones(N), store = nothing)
+function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store, verbose)
     
     subprob = Dict()
 
@@ -431,10 +417,7 @@ function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs = 1/N
 
     for index in 1:length(v_dict[1])
         var = v_dict[1][index]
-        # very temporary
-        #firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, x_init[1], var[4], var[2], var[3], nothing)
         firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3], nothing)
-
     end
 
     firststage = FirstStageInfo(firststagevars, subprob, store);

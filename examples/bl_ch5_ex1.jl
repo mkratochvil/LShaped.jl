@@ -58,9 +58,9 @@ end
 
 
 xn, firststage, fs = LShaped.L_Shaped_Algorithm(subproblem_constructor, 
-                                        v_dict, 2, create_first_stage, 1e-6, 10, [0.4, 0.6])#; store="./bl_data/");
+                                        v_dict, 2, create_first_stage, 1e-6, 10, [0.4, 0.6]; store="./bl_data/");
 
 xnn, firststagen, fsn = LShaped.L_Shaped_Algorithm_new(subproblem_constructor, 
-                                        v_dict, 2, create_first_stage, 1e-6, 10, [0.4, 0.6])#; store="./bl_data_new/");
+                                        v_dict, 2, create_first_stage, 1e-6, 10, [0.4, 0.6]; store="./bl_data_new/");
 
 #rm("bl_data",recursive=true)

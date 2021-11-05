@@ -407,4 +407,4 @@ function create_first_stage()
 end
 
 xn, firststage, fs = LShaped.L_Shaped_Algorithm_new(subproblem_uploader, 
-                                        v_dict, 2, create_first_stage, 1e-6, 69)#; store="./ts3_data/");
+                                        v_dict, 2, create_first_stage, 1e-6, 100; store="./ts3_data_new/");
