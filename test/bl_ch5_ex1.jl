@@ -7,7 +7,7 @@ using LShaped
 
 # implementation of Birge, Louveax Ch. 5 Ex 1 Second Stage
 
-function subproblem_constructor(sid)
+function bl2(sid)
     
     q1 = [-24, -28]
     q2 = [-28, -32]
@@ -36,19 +36,20 @@ function subproblem_constructor(sid)
 end
 
 
-v_dict = Dict()
+blv = Dict{Int64,Array{Any}}()
 
-v_dict[1] = [("x1", 40, Inf, 40), ("x2", 20, Inf, 20)]
-v_dict[2] = ["y1", "y2"]
+blv[1] = [("x1", 40, Inf, 40), ("x2", 20, Inf, 20)]
+blv[2] = ["y1", "y2"]
 
-function create_first_stage()
+function bl1()
   
     fs = Model(with_optimizer(Gurobi.Optimizer, OutputFlag=0));
     
     @variable(fs, x1 >= 40)
     @variable(fs, x2 >= 20)
     
-    @objective(fs, Min, 100*x1 + 150*x2)
+    #@objective(fs, Min, 100*x1 + 150*x2)
+    @objective(fs, Min, 0.0)
     
     @constraint(fs, x1 + x2 <= 120)
     
@@ -57,10 +58,4 @@ function create_first_stage()
 end
 
 
-xn, firststage, fs = LShaped.L_Shaped_Algorithm(subproblem_constructor, 
-                                        v_dict, 2, create_first_stage, 1e-6, 10, [0.4, 0.6]; store="./bl_data/");
 
-xnn, firststagen, fsn = LShaped.L_Shaped_Algorithm_new(subproblem_constructor, 
-                                        v_dict, 2, create_first_stage, 1e-6, 10, [0.4, 0.6]; store="./bl_data_new/");
-
-#rm("bl_data",recursive=true)

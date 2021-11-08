@@ -8,7 +8,7 @@ using LShaped
 
 function create_model_var_obj(dfvar)
     
-    model = Model(with_optimizer(Gurobi.Optimizer; OutputFlag = 1))
+    model = Model(with_optimizer(Gurobi.Optimizer; OutputFlag = 0))
 
     cexpr = JuMP.GenericAffExpr(0.0, OrderedDict{VariableRef,Float64}())
     for i = 1:size(dfvar)[1]
@@ -163,9 +163,9 @@ end
 
 
 # creates the model whose info is stored in "dir/scenid"
-function subproblem_uploader(scenid)
+function wsgep2(scenid)
     
-    dir = "../../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
+    dir = "../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
     
     varfile = string(dir, scenid, "/vars_eff.csv")
     confile = string(dir, scenid, "/cons_eff.csv")
@@ -188,7 +188,7 @@ function subproblem_uploader(scenid)
 end
 
 
-dir = "../../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
+dir = "../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
 
 scenid = 1
 
@@ -203,7 +203,7 @@ dfvar[size(dfvar,1),1]
 x_init = ones(150);
 
 function variable_dict_primal(varlist, x)
-    vdict = Dict{Int,Any}()
+    vdict = Dict{Int64,Array{Any}}()
     vdict[1]=[]
     vdict[2]=[]
     i = 0
@@ -218,13 +218,15 @@ function variable_dict_primal(varlist, x)
             
             # for some reason, the lower bound on these variables is not showing...I'm not sure why.
             lb = 0
-            ub = Inf
+            ub = 1000.0
             #if has_lower_bound(var) == 1
             #    lb = lower_bound(var)
             #end
             #if has_upper_bound(var) == 1
             #    ub = upper_bound(var)
             #end
+            
+
             push!(vdict[1], (vname, lb, ub, x[i]))
         else
             push!(vdict[2], vname)
@@ -233,11 +235,9 @@ function variable_dict_primal(varlist, x)
     return vdict
 end
 
-v_dict = variable_dict_primal(dfvar[:,2], x_init);
+wsgepv = variable_dict_primal(dfvar[:,2], x_init);
 
-v_dict[1]
-
-function create_first_stage()
+function wsgep1()
     
     names = ["r_WE[101_WIND_2]"
 "r_WE[102_WIND_2]"
@@ -392,19 +392,17 @@ function create_first_stage()
 ];
 
     fs = Model(with_optimizer(Gurobi.Optimizer, OutputFlag = 1));
-    #set_optimizer_attribute(fs, "msg_lev", GLPK.GLP_MSG_ALL)
 
     x = Vector{VariableRef}()
     for i = 1:150
-        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0))
+        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0, upper_bound = 1000.0))
     end
     
-    #@objective(fs, Min, sum(0.9040815000000001*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
-    @objective(fs, Min, 0.0)
+    @objective(fs, Min, sum(0.9040815000000001*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
+    #@objective(fs, Min, 0.0)
         
     return fs
     
 end
 
-xn, firststage, fs = LShaped.L_Shaped_Algorithm_new(subproblem_uploader, 
-                                        v_dict, 2, create_first_stage, 1e-6, 100; store="./ts3_data_new/");
+

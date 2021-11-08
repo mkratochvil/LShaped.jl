@@ -1,30 +1,4 @@
-function update_constraint_values!(varstructs, linkedcons)
-    
-    for con in keys(linkedcons)
-        curval = linkedcons[con].initvalue
-        for var in linkedcons[con].variables
-            curval -= varstructs[var].conval[con]*varstructs[var].value
-        end
-        settype = string(linkedcons[con].set)
-        functype = string(linkedcons[con].func)
-        if occursin("EqualTo", settype) || occursin("EqualTo", functype)
-            MOI.set(linkedcons[con].ref.model, MOI.ConstraintSet(), linkedcons[con].ref, MOI.EqualTo(curval))
-        elseif occursin("LessThan", settype) || occursin("LessThan", functype)
-            MOI.set(linkedcons[con].ref.model, MOI.ConstraintSet(), linkedcons[con].ref, MOI.LessThan(curval))
-        elseif occursin("GreaterThan", settype) || occursin("GreaterThan", functype)
-            MOI.set(linkedcons[con].ref.model, MOI.ConstraintSet(), linkedcons[con].ref, MOI.GreaterThan(curval))
-        else
-            println(settype)
-            println(functype)
-            println("Something went wrong.")
-        end
-        linkedcons[con].curvalue = curval
-    end
-    
-    return
-end
-
-function update_constraint_values_nac!(model, varstructs)
+function update_constraint_values_nac!(model::JuMP.Model, varstructs::Dict{Int64,LocalVariableInfo})
     
     for var in keys(varstructs)
         name = varstructs[var].name
@@ -34,42 +8,11 @@ function update_constraint_values_nac!(model, varstructs)
     
     return
 end
-
-function update_gradients!(varstructs, linkedcons) 
     
-    for var in keys(varstructs)
-        grad = varstructs[var].cost
-        for con in keys(varstructs[var].conval)
-            #dual*coeff*var
-            dual = JuMP.dual(linkedcons[con].ref)
-            if occursin("LessThan", string(linkedcons[con].func))
-                if dual > 0
-                    #println("Positive dual $(dual) at constraint $(con)")
-                    dual = 0
-                end
-            elseif occursin("GreaterThan", string(linkedcons[con].func))
-                if dual < 0
-                    #println("Negative dual $(dual) at constraint $(con)")
-                    dual = 0
-                end
-            end
-            coeff = varstructs[var].conval[con]
-            grad -= dual*coeff
-        end
-        varstructs[var].gradient = grad
-    end
-    
-    return
-    
-end
-    
-function update_gradients_nac!(model, varstructs)
+function update_gradients_nac!(model::JuMP.Model, varstructs::Dict{Int64,LocalVariableInfo})
     
     for var in keys(varstructs)
         name = varstructs[var].name
-        
-        cost = varstructs[var].cost
-        #println("$(name), $(cost)")
     
         varstructs[var].gradient = JuMP.dual(JuMP.FixRef(JuMP.variable_by_name(model,name)))
         
@@ -79,13 +22,11 @@ function update_gradients_nac!(model, varstructs)
     
 end
 
-function solve_sub_and_update!(subproblem)
+function solve_sub_and_update!(subproblem::Union{Subproblems,SubproblemsNew})
         
     varstructs = subproblem.variableinfo
-    #linkedcons = subproblem.linkedconstraintinfo
     model = subproblem.model
 
-    #update_constraint_values!(varstructs,linkedcons)
     update_constraint_values_nac!(model, varstructs)
     
     println("...Solving subproblem: $(subproblem.id)...")
@@ -98,7 +39,7 @@ function solve_sub_and_update!(subproblem)
     
 end
 
-function get_cost_vector(firststage, fsmodel)
+function get_cost_vector(firststage::FirstStageInfo, fsmodel::JuMP.Model)
         
     vardict = firststage.variables
     nvars = vardict.count
@@ -112,7 +53,6 @@ function get_cost_vector(firststage, fsmodel)
         
         vref = JuMP.variable_by_name(fsmodel, vname)
                
-        #this might not work. there is in fact a second stage cost at the moment.
         if vref in keys(JuMP.objective_function(fsmodel).terms)
             cost[index] = JuMP.objective_function(fsmodel).terms[vref]
         else
@@ -125,7 +65,7 @@ function get_cost_vector(firststage, fsmodel)
     
 end
 
-function update_first_gradient!(firststage)
+function update_first_gradient!(firststage::FirstStageInfo)
         
     for var in keys(firststage.variables)
         grad1 = 0.0;
@@ -137,23 +77,6 @@ function update_first_gradient!(firststage)
             grad1 += prob*grad2
         end
         firststage.variables[var].gradient = grad1
-        #variable = firststage.variables[var].name
-    end
-    
-    return
-    
-end
-
-# maybe adjust alpha eventually.
-
-function update_first_value!(firststage, alpha)
-        
-    for var in keys(firststage.variables)
-        old_value = firststage.variables[var].value
-        grad = firststage.variables[var].gradient
-        new_value = old_value - alpha*grad
-        firststage.variables[var].value = new_value
-        variable = firststage.variables[var].name
     end
     
     return
@@ -161,7 +84,7 @@ function update_first_value!(firststage, alpha)
 end
 
 #eventually parallelize and put another function inside.
-function update_second_value!(firststage) 
+function update_second_value!(firststage::FirstStageInfo) 
     
     for var in keys(firststage.variables)
         for sub = keys(firststage.subproblems)
@@ -176,25 +99,7 @@ function update_second_value!(firststage)
     
 end
 
-### this uses direct definition and not nac constraints ###
-function iterate!(firststage) 
-        
-    # done separately to eventually parallelize 
-    for i in keys(firststage.subproblems)  
-        solve_sub_and_update!(firststage.subproblems[i])
-    end
-
-    update_first_gradient!(firststage)
-
-    update_first_value!(firststage, 0.1)
-
-    update_second_value!(firststage)
-    
-    return
-    
-end
-
-function get_grad_vector(firststage)
+function get_grad_vector(firststage::FirstStageInfo)
         
     vardict = firststage.variables
     nvars = vardict.count
@@ -215,7 +120,8 @@ function get_grad_vector(firststage)
     
 end
 
-function get_value_vector(firststage)
+#Eventually make this from file.
+function get_value_vector(firststage::FirstStageInfo)
         
     vardict = firststage.variables
     nvars = vardict.count
@@ -236,9 +142,8 @@ function get_value_vector(firststage)
     
 end
 
-function get_objective_value(firststage)
+function get_objective_value(firststage::FirstStageInfo)
     
-    #change this. this could lead to issues.
     objval = 0.0;
 
     subdict = firststage.subproblems
@@ -246,21 +151,7 @@ function get_objective_value(firststage)
     for sid in keys(subdict)
 
         subobjval = subdict[sid].objective_value
-        
         vardict = subdict[sid].variableinfo
-        
-        for var in keys(vardict)
-            
-            varinfo = vardict[var]
-            
-            value = varinfo.value
-            cost = varinfo.cost
-            
-            subobjval += cost*value
-            
-        end
-            
-            
         prob = subdict[sid].probability
 
         objval += prob*subobjval
@@ -272,12 +163,12 @@ function get_objective_value(firststage)
 end
 
 #TODO make a dict so we know which constraints to adjust.
-function adjust_h(firststage, contoidx, h)
+function adjust_h(firststage::FirstStageInfo, contoidx::Dict{Any,Int64}, h::Matrix{Float64})
         
     models = firststage.subproblems
     
     ns = models.count
-    nc = models[1].ncons#contoidx.count
+    contoidx.count
         
     for sid in keys(models)
         m = models[sid].model
@@ -312,7 +203,7 @@ end
 
 #TODO since this only applies to interval constraints, classify constraints in subproblem by type, so it
 # does not have to parse through every constraint.
-function adjust_h_new!(subproblem)
+function adjust_h_new!(subproblem::Union{Subproblems,SubproblemsNew})
 
     idxtocon = subproblem.idxtocon
     h = subproblem.h
@@ -321,7 +212,7 @@ function adjust_h_new!(subproblem)
         
         con = idxtocon[idx]
         
-        #this is a placeholder, as below is obviously poor coding practice.
+        #this is a placeholder
         ctype = string(typeof(con))
         
         #do nothing if not an interval constraint. If something weird is happening say to add constraint type.
@@ -346,7 +237,7 @@ function adjust_h_new!(subproblem)
     return
 end
 
-function compute_e(firststage, h, PI)
+function compute_e(firststage::FirstStageInfo, h::Matrix{Float64}, PI::Matrix{Float64})
         
     e_k = 0.0;
     for i in keys(firststage.subproblems)
@@ -357,7 +248,7 @@ function compute_e(firststage, h, PI)
 end
     
 
-function compute_PI(firststage, contoidx)
+function compute_PI(firststage::FirstStageInfo, contoidx::Dict{Any,Int64})
         
     N = firststage.subproblems.count
     nc = contoidx.count
@@ -386,24 +277,18 @@ function compute_PI(firststage, contoidx)
 end
 ;
 
-function add_theta_to_objective!(fs)
+function add_theta_to_objective!(fs::JuMP.Model)
         
     @variable(fs, theta)
-    
     obj_old = objective_function(fs)
-    
     @objective(fs, Min, obj_old + theta)
     
-    #fsnew = Model();
-    
-    #MathOptInterface.copy_to(fsnew.moi_backend.model_cache.model, fs.moi_backend.model_cache.model)
-    
-    return fs#new
+    return fs
     
 end
     
 
-function add_constraint_to_objective!(fs, E, e_k, v_dict)
+function add_constraint_to_objective!(fs::JuMP.Model, E::Array{Float64}, e_k::Float64, v_dict::Dict{Int64,Array{Any}})
         
     nvar = length(E)
     
@@ -415,7 +300,7 @@ function add_constraint_to_objective!(fs, E, e_k, v_dict)
 end
 
 
-function update_first_value_L!(firststage, fs)
+function update_first_value_L!(firststage::FirstStageInfo, fs::JuMP.Model)
         
     for vname in keys(firststage.variables)
         
@@ -429,7 +314,7 @@ function update_first_value_L!(firststage, fs)
     
 end
 
-function setup_1st_paths!(firststage)
+function setup_1st_paths!(firststage::FirstStageInfo)
     
     path = firststage.store
     vardict = firststage.variables
@@ -471,7 +356,7 @@ function setup_1st_paths!(firststage)
     return
 end
 
-function store_x!(firststage)
+function store_x!(firststage::FirstStageInfo)
     
     path = firststage.store
     xcsv = string(path, "x.csv")
@@ -490,7 +375,7 @@ function store_x!(firststage)
     
 end
 
-function store_E!(firststage, E)
+function store_E!(firststage::FirstStageInfo, E::Array{Float64})
     
     path = firststage.store
     Ecsv = string(path, "E.csv")
@@ -507,7 +392,7 @@ function store_E!(firststage, E)
     
 end
 
-function store_e!(firststage, e_k)
+function store_e!(firststage::FirstStageInfo, e_k::Float64)
     
     path = firststage.store
     ecsv = string(path, "ek.csv")
@@ -520,7 +405,7 @@ function store_e!(firststage, e_k)
     
 end
 
-function store_w_theta!(firststage, w, theta)
+function store_w_theta!(firststage::FirstStageInfo, w::Float64, theta::Float64)
     
     path = firststage.store
     wtcsv = string(path, "w_theta.csv")
@@ -533,7 +418,7 @@ function store_w_theta!(firststage, w, theta)
     
 end
 
-function setup_2nd_paths!(path, subproblem)
+function setup_2nd_paths!(path::String, subproblem::Union{Subproblems,SubproblemsNew})
     
     vardict = subproblem.variableinfo
     sid = subproblem.id
@@ -578,7 +463,7 @@ function setup_scen_path!(path::String, sid::Int64)
     
 end
 
-function store_Es_es!(path, subproblem, pi_k, h_k)
+function store_Es_es!(path::String, subproblem::Union{Subproblems,SubproblemsNew}, pi_k::Array{Float64}, h_k::Array{Float64})
            
     prob = subproblem.probability
     vardict = subproblem.variableinfo
@@ -591,29 +476,11 @@ function store_Es_es!(path, subproblem, pi_k, h_k)
     for var in keys(vardict)
         vind = vardict[var].index
         grad2 = vardict[var].gradient
-        cost = vardict[var].cost
         
         # this is using the NAC method
-        Evec[vind] = prob*(cost - grad2)
+        Evec[vind] = -prob*grad2
         
     end
-    
-    # now it's e's turn
-    #=m = subproblem.model
-    nc = contoidx.count
-    PIk = Array{Float64}(undef, nc)
-
-    for (F,S) in list_of_constraint_types(m)
-        for con in all_constraints(m,F,S)
-           if occursin("AffExpr",string(F))
-                #f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
-                #conidxtoref[index] = (F,S,f,con, con.index.value)
-                idx = con.index.value
-                dual = JuMP.dual(con)
-                PIk[contoidx[idx]] = dual
-           end
-        end
-    end=#
     
     #TODO have this not based on firststage stuff
     e_k = prob*dot(pi_k,h_k)
@@ -639,7 +506,7 @@ function store_Es_es!(path, subproblem, pi_k, h_k)
 end
 
 
-function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, verbose)
+function iterate_L(firststage::FirstStageInfo, fs::JuMP.Model, contoidx::Dict, h::Matrix{Float64}, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64)
         
     x = 0
     
@@ -647,6 +514,7 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
     if verbose == 1
         println("cost = $(cost)")
     end
+    println("cost = $(cost)")
     
     for i = 1:niter
 
@@ -700,9 +568,6 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
         end
                 
         h = adjust_h(firststage, contoidx, h)
-        if verbose == 1
-            println("h = $(h)")
-        end
 
         E = cost - grad
         if firststage.store != nothing
@@ -712,16 +577,9 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
             println("E = $(E)")
         end
 
-
         #update PI
         PI = compute_PI(firststage, contoidx)
-        #printing this directly is not recommended
-        #println("PI = $(PI)")
-        
-        #this needs to be redesigned. e_k in the second stage needs to be recorded first in the fashion of E
-        #this requires restructuring how contoidx, pi, and h are constructed in the second stage.
-        #this will probably take a full day of work but will be needed to do the async stuff.
-        
+                
         if firststage.store != nothing
             for sid in keys(firststage.subproblems)
                 store_Es_es!(firststage.store, firststage.subproblems[sid], PI[sid,:], h[sid,:])
@@ -743,7 +601,6 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
         if verbose == 1
             println("x = $(x)")
         end
-    
 
         if addtheta == 1
             theta = JuMP.value(JuMP.variable_by_name(fs, "theta"))
@@ -784,7 +641,7 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
     
 end
 
-function compute_Ek_new!(subproblem)
+function compute_Ek_new!(subproblem::Union{Subproblems,SubproblemsNew})
     
     prob = subproblem.probability
     vardict = subproblem.variableinfo
@@ -796,10 +653,9 @@ function compute_Ek_new!(subproblem)
     for var in keys(vardict)
         vind = vardict[var].index
         grad2 = vardict[var].gradient
-        cost = vardict[var].cost
         
         # this is using the NAC method
-        Evec[vind] = prob*(cost - grad2)
+        Evec[vind] = -prob*grad2
         
     end
     
@@ -809,7 +665,7 @@ function compute_Ek_new!(subproblem)
     
 end
 
-function compute_ek_new!(subproblem)
+function compute_ek_new!(subproblem::Union{Subproblems,SubproblemsNew})
     
     prob = subproblem.probability
     idxtocon = subproblem.idxtocon
@@ -832,7 +688,7 @@ function compute_ek_new!(subproblem)
     
 end
 
-function store_Ek_sub!(subproblem, path)
+function store_Ek_sub!(subproblem::Union{Subproblems,SubproblemsNew}, path::String)
     
     sid = subproblem.id
     Evec = subproblem.Ek
@@ -851,7 +707,7 @@ function store_Ek_sub!(subproblem, path)
     
 end
 
-function store_ek_sub!(subproblem, path)
+function store_ek_sub!(subproblem::Union{Subproblems,SubproblemsNew}, path::String)
     
     sid = subproblem.id
     ek = subproblem.ek
@@ -866,69 +722,8 @@ function store_ek_sub!(subproblem, path)
     
 end
     
-    
-#=function store_Es_es!(path, subproblem, pi_k, h_k)
-           
-    prob = subproblem.probability
-    vardict = subproblem.variableinfo
-    sid = subproblem.id
-    nvars = vardict.count
-    
-    # initialize E vector
-    Evec = Vector{Float64}(undef, nvars) 
-    
-    for var in keys(vardict)
-        vind = vardict[var].index
-        grad2 = vardict[var].gradient
-        cost = vardict[var].cost
-        
-        # this is using the NAC method
-        Evec[vind] = prob*(cost - grad2)
-        
-    end
-    
-    # now it's e's turn
-    #=m = subproblem.model
-    nc = contoidx.count
-    PIk = Array{Float64}(undef, nc)
-
-    for (F,S) in list_of_constraint_types(m)
-        for con in all_constraints(m,F,S)
-           if occursin("AffExpr",string(F))
-                #f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
-                #conidxtoref[index] = (F,S,f,con, con.index.value)
-                idx = con.index.value
-                dual = JuMP.dual(con)
-                PIk[contoidx[idx]] = dual
-           end
-        end
-    end=#
-    
-    #TODO have this not based on firststage stuff
-    e_k = prob*dot(pi_k,h_k)
-    
-    Ecsv = string(path, "scen_$(sid)/E.csv")
-    ekcsv = string(path, "scen_$(sid)/ek.csv")
-    
-    sE = string(Evec)
-    n = length(string(Evec))
-
-    sE = sE[2:n-1]
-    open(Ecsv, "a") do io
-        write(io, "$(sE) \n")
-    end 
-            
-    open(ekcsv, "a") do io
-        write(io, "$(e_k) \n")
-    end
-    
-    
-    return
-    
-end=#
-
 #as opposed to get_El_from_file to be made
-function get_El_from_sub!(firststage)
+function get_El_from_sub!(firststage::FirstStageInfo)
     
     subproblems = firststage.subproblems
     nvars = firststage.variables.count
@@ -943,7 +738,7 @@ function get_El_from_sub!(firststage)
     
 end
 
-function get_el_from_sub!(firststage)
+function get_el_from_sub!(firststage::FirstStageInfo)
     
     subproblems = firststage.subproblems
     
@@ -957,7 +752,7 @@ function get_el_from_sub!(firststage)
     
 end
 
-function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
+function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64)
         
     x = 0
     
@@ -1050,7 +845,6 @@ function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
             end
         end
                     
-        #E = cost - grad
         #get it from subproblems. In async make get_Ek_from_file function
         println("Updating First stage stuff...")
         #TODO change this to gradient, as two-stage problems have a certain first stage cost ONLY
@@ -1064,8 +858,6 @@ function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
             println("el = $(el)")
         end
         
-       
-
         x = get_value_vector(firststage)
         if verbose == 1
             println("x = $(x)")
@@ -1111,11 +903,3 @@ function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
     return x, firststage, fs, niter
     
 end
-
-
-
-
-
-
-
-
