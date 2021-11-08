@@ -3,8 +3,3 @@
 *.jl.mem
 deps/deps.jl
 examples/.ipynb_checkpoints
-examples/bl_ch5_ex1.jl
-examples/wsgep_2_288.ipynb
-examples/wsgep_2_288.jl
-examples/wsgep_2_288_new.jl
-src/function_pipeline
