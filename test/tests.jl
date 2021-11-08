@@ -16,8 +16,8 @@ blxtest = [46.66666666666667, 36.25]
 wsgepxtest = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1.757008472,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,35.3516819,0,0,0,
 0,0,0,0,0,0,0,0.254070409,0,0,0,0,0,0,3.565270862,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
-
-blx, blfstruct, blfsmodel = LShaped.L_Shaped_Algorithm(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6])#; verbose =1, store="./bl_data/");
+#=
+blx, blfstruct, blfsmodel = @suppress LShaped.L_Shaped_Algorithm(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]; store="./bl_data/");
 
 blt = norm(blxtest-blx)
 if blt < tol
@@ -25,8 +25,8 @@ if blt < tol
 else
 	println("BL Old Test FAILED!!! $(blt)")
 end
-#=
-blxn, blfstructn, blfsmodeln = @suppress LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6])#; store="./bl_data_new/");
+
+blxn, blfstructn, blfsmodeln = @suppress LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]; store="./bl_data_new/");
 
 bltn = norm(blxtest-blxn)
 if bltn < tol
@@ -35,7 +35,7 @@ else
 	println("BL New Test FAILED!!! $(bltn)")
 end
 
-wsgepx, wsgepfsstruct, wsgepfsmodel = @suppress LShaped.L_Shaped_Algorithm(wsgep2, wsgepv, 2, wsgep1, 1e-6, 100)#; store="./bl_data/");
+wsgepx, wsgepfsstruct, wsgepfsmodel = @suppress LShaped.L_Shaped_Algorithm(wsgep2, wsgepv, 2, wsgep1, 1e-6, 100; store="./ws_data/");
 
 wsgept = norm(wsgepxtest-wsgepx)
 if wsgept < tol
@@ -43,8 +43,8 @@ if wsgept < tol
 else
 	println("WSGEP Old Test FAILED!!! $(wsgept)")
 end
-
-wsgepxn, wsgepfsstructn, wsgepfsmodeln = LShaped.L_Shaped_Algorithm_new(wsgep2, wsgepv, 2, wsgep1, 1e-6, 100)#; store="./bl_data_new/");
+=#
+wsgepxn, wsgepfsstructn, wsgepfsmodeln = LShaped.L_Shaped_Algorithm_new(wsgep2, wsgepv, 2, wsgep1, 1e-6, 100; store="./ws_data_new/");
 
 wsgeptn = norm(wsgepxtest-wsgepxn)
 if wsgeptn < tol
@@ -52,4 +52,3 @@ if wsgeptn < tol
 else
 	println("WSGEP New Test FAILED!!! $(wsgeptn)")
 end
-=#

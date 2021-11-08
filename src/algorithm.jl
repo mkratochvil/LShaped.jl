@@ -39,8 +39,6 @@ function solve_sub_and_update!(subproblem)
     
 end
 
-#either keep this, or move the methodology to a struct.
-#regardless, you will eventually be loading it from file so maybe it will not make a difference?
 function get_cost_vector(firststage, fsmodel)
         
     vardict = firststage.variables
@@ -79,7 +77,6 @@ function update_first_gradient!(firststage)
             grad1 += prob*grad2
         end
         firststage.variables[var].gradient = grad1
-        #variable = firststage.variables[var].name
     end
     
     return
@@ -145,7 +142,6 @@ function get_value_vector(firststage)
     
 end
 
-#Likely broken the way things are done now.
 function get_objective_value(firststage)
     
     objval = 0.0;
@@ -172,7 +168,7 @@ function adjust_h(firststage, contoidx, h)
     models = firststage.subproblems
     
     ns = models.count
-    nc = models[1].ncons#contoidx.count
+    contoidx.count
         
     for sid in keys(models)
         m = models[sid].model
@@ -216,7 +212,7 @@ function adjust_h_new!(subproblem)
         
         con = idxtocon[idx]
         
-        #this is a placeholder, as below is obviously poor coding practice.
+        #this is a placeholder
         ctype = string(typeof(con))
         
         #do nothing if not an interval constraint. If something weird is happening say to add constraint type.
@@ -284,16 +280,10 @@ end
 function add_theta_to_objective!(fs)
         
     @variable(fs, theta)
-    
     obj_old = objective_function(fs)
-    
     @objective(fs, Min, obj_old + theta)
     
-    #fsnew = Model();
-    
-    #MathOptInterface.copy_to(fsnew.moi_backend.model_cache.model, fs.moi_backend.model_cache.model)
-    
-    return fs#new
+    return fs
     
 end
     
@@ -486,10 +476,9 @@ function store_Es_es!(path, subproblem, pi_k, h_k)
     for var in keys(vardict)
         vind = vardict[var].index
         grad2 = vardict[var].gradient
-        cost = vardict[var].cost
         
         # this is using the NAC method
-        Evec[vind] = prob*(cost - grad2)
+        Evec[vind] = -prob*grad2
         
     end
     
@@ -579,9 +568,6 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
         end
                 
         h = adjust_h(firststage, contoidx, h)
-        #if verbose == 1
-        #    println("h = $(h)")
-        #end
 
         E = cost - grad
         if firststage.store != nothing
@@ -591,11 +577,8 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
             println("E = $(E)")
         end
 
-
         #update PI
         PI = compute_PI(firststage, contoidx)
-        #printing this directly is not recommended
-        #println("PI = $(PI)")
                 
         if firststage.store != nothing
             for sid in keys(firststage.subproblems)
@@ -618,7 +601,6 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
         if verbose == 1
             println("x = $(x)")
         end
-    
 
         if addtheta == 1
             theta = JuMP.value(JuMP.variable_by_name(fs, "theta"))
@@ -671,10 +653,9 @@ function compute_Ek_new!(subproblem)
     for var in keys(vardict)
         vind = vardict[var].index
         grad2 = vardict[var].gradient
-        cost = vardict[var].cost
         
         # this is using the NAC method
-        Evec[vind] = prob*(cost - grad2)
+        Evec[vind] = -prob*grad2
         
     end
     
@@ -864,7 +845,6 @@ function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
             end
         end
                     
-        #E = cost - grad
         #get it from subproblems. In async make get_Ek_from_file function
         println("Updating First stage stuff...")
         #TODO change this to gradient, as two-stage problems have a certain first stage cost ONLY

@@ -1,87 +1,14 @@
-function varRefToIdx(m)
-        
-    varrefs = all_variables(m)
-    varreftoidx = Dict()
-    
-    for var in varrefs
-        varreftoidx[var] = var.index.value
-    end
-    
-    return varreftoidx
-
-end
-    
-function varIdxToRef(m)
-        
-    varrefs = all_variables(m)
-    varidxtoref = Dict()
-
-    for var in varrefs
-        varidxtoref[var.index.value] = var
-    end
-
-    return varidxtoref
-end
-
-function varIdxToCost(m)
-        
-    varidxtocost = Dict()
-    
-    obj= MOI.get(m, MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}())
-    
-    for term in obj.terms
-        varidxtocost[term.variable_index.value] = term.coefficient
-    end
-    
-    return varidxtocost
-    
-end
-
-function conIdxToRef(m)
-        
-    conidxtoref = Dict()
-    moi_backend = backend(m)
-    index = 0
-    for (F,S) in list_of_constraint_types(m)
-        for con in all_constraints(m,F,S)
-            index += 1
-           if occursin("AffExpr",string(F))
-                f = MOI.get(moi_backend, MOI.ConstraintFunction(), con.index)
-                conidxtoref[index] = (F,S,f,con, con.index.value)
-           end
-        end
-    end
-    
-    return conidxtoref
-    
-end
-
-function make_dicts_and_arrays(m)
-        
-    vr = varRefToIdx(m)
-    vi = varIdxToRef(m)
-    vc = varIdxToCost(m)
-    cr = conIdxToRef(m)
-    #ae, al, ag, ie, il, ig = create_eq_lt_gt_arrays(m,cr,vi)
-    
-    #return vr, vi, vc, cr, ae, al, ag, ie, il, ig
-    return vr, vi, vc, cr #ae, al, ag, ie, il, ig
-    
-end
-
-
-function make_VariableInfo(vardict, vartocost, condict)
+function make_VariableInfo(vardict)
     
     varstructs = Dict()
     
     for vname in keys(vardict[1])
         vid = vardict[1][vname]
-        varstructs[vid] = LocalVariableInfo(vid, vname, nothing, 0.0, nothing, 0.0, nothing)
+        varstructs[vid] = LocalVariableInfo(vid, vname, nothing, 0.0, nothing)
     end
 
     return varstructs
 end
-
 
 function stage_name_idx(model::JuMP.Model, vardict)
         
@@ -110,13 +37,10 @@ function initialize(model, vnames)
     println("...making stage_name_idx...")
     vardict = stage_name_idx(model, vnames)
     
-    println("...Making dicts and arrays...")
-    vrm1, vindtoref, varcost, condict = make_dicts_and_arrays(model);
-    
     println("...making variable_info...") #TODO fix the bottleneck here. 
-    varstructs = make_VariableInfo(vardict, varcost, condict);
+    varstructs = make_VariableInfo(vardict)
     
-    return model, varstructs, vardict[1], 0
+    return model, varstructs, vardict[1]
     
 end
 
@@ -137,8 +61,7 @@ end
 
 
 # huge assumption that the subproblems will have the same constraint order.
-# this should be true for my problems.
-# May cause issues with WSGEP
+# this should be true for my problems, but still will not use when in parallel.
 function ConToIdx(m)
     
     contoidx = Dict()
@@ -158,11 +81,10 @@ function ConToIdx(m)
     end
     println("contoidx og count = $(count).")
     
-    return contoidx, count
+    return contoidx
     
 end
 
-#creates a constraint number and lists the constraint in it.
 function IdxToCon(m)
     
     idxtocon = Dict()
@@ -216,10 +138,10 @@ function compute_h_new(model,idxtocon)
     return h
 end
 
-function compute_h(models, contoidx, count)
+function compute_h(models, contoidx)
     
     ns = models.count
-    nc = count
+    nc = contoidx.count
     
     h = Array{Float64}(undef, ns, nc)
     
@@ -265,26 +187,22 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, v
         models[i] = subproblem_generator(i);
     end
     
-    contoidx, count = ConToIdx(models[1])
+    contoidx = ConToIdx(models[1])
     
-    h = compute_h(models, contoidx, count)
+    h = compute_h(models, contoidx)
     
     subprob = Dict()
 
     for i = 1:N
         
-        model, varstructs, vnametoidx, arrays = initialize(models[i], v_dict)
+        model, varstructs, vnametoidx = initialize(models[i], v_dict)
                 
         update_constraint_values_nac!(model, varstructs)
         
-        subprob[i] = Subproblems(i, model, probs[i], varstructs, count, nothing, vnametoidx, arrays, nothing)
+        subprob[i] = Subproblems(i, model, probs[i], varstructs, vnametoidx, nothing)
 
     end
-    
-    #contoidx, count = ConToIdx(subprob[1].model)
-    
-    #h = compute_h(models, contoidx, count)
-
+        
     firststagevars = Dict()
 
     for index in 1:length(v_dict[1])
@@ -294,7 +212,6 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, v
 
     firststage = FirstStageInfo(firststagevars, subprob, store);
     
-    #temporary? ideally this would be when the second stage is made.
     update_second_index!(firststage)
     
     return firststage, contoidx, h
@@ -315,12 +232,10 @@ function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, stor
         h = compute_h_new(model, idxtocon)
     
         println("Initializing subproblem $(i)...")
-        model, varstructs, vnametoidx, arrays = initialize(model, v_dict)
+        model, varstructs, vnametoidx = initialize(model, v_dict)
 
-        #add descriptions to these.
         println("Creating subprob[$(i)] struct...")
-        subprob[i] = SubproblemsNew(i, model, probs[i], varstructs, nothing, idxtocon, 
-                                            h, nothing, nothing, vnametoidx, arrays, nothing)
+        subprob[i] = SubproblemsNew(i, model, probs[i], varstructs, idxtocon, h, nothing, nothing, vnametoidx, nothing)
 
     end
 
@@ -333,7 +248,6 @@ function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, stor
 
     firststage = FirstStageInfo(firststagevars, subprob, store);
     
-    #temporary? ideally this would be when the second stage is made.
     update_second_index!(firststage)
     
     return firststage

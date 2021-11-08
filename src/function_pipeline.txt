@@ -62,7 +62,7 @@ FirstStage	.variables[v]*	.name
 					.id
 					.name
 					.index
-					.cost #change to first stage 
+					(.cost) #change to first stage 
 					.conval
 					.value
 					.gradient
