@@ -8,7 +8,7 @@ using LShaped
 
 function create_model_var_obj(dfvar)
     
-    model = Model(with_optimizer(Gurobi.Optimizer; OutputFlag = 1))
+    model = Model(with_optimizer(Gurobi.Optimizer; OutputFlag = 0))
 
     cexpr = JuMP.GenericAffExpr(0.0, OrderedDict{VariableRef,Float64}())
     for i = 1:size(dfvar)[1]
@@ -218,7 +218,7 @@ function variable_dict_primal(varlist, x)
             
             # for some reason, the lower bound on these variables is not showing...I'm not sure why.
             lb = 0
-            ub = Inf
+            ub = 1000.0
             #if has_lower_bound(var) == 1
             #    lb = lower_bound(var)
             #end
@@ -395,11 +395,11 @@ function wsgep1()
 
     x = Vector{VariableRef}()
     for i = 1:150
-        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0))
+        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0, upper_bound = 1000.0))
     end
     
-    #@objective(fs, Min, sum(0.9040815000000001*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
-    @objective(fs, Min, 0.0)
+    @objective(fs, Min, sum(0.9040815000000001*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
+    #@objective(fs, Min, 0.0)
         
     return fs
     

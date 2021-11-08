@@ -76,85 +76,18 @@ function make_VariableInfo(vardict, vartocost, condict)
     
     for vname in keys(vardict[1])
         vid = vardict[1][vname]
-        conval=Dict();
-        # note vartocost may be obsolete. directly implement in class?
-        cost = 0.0;#vartocost[vid]
-        # note this may change. I seek out the constraints in which variables appear iteratively
-        # better to do this by constraint or by variable?
-        # ^^ 100% correct. this turned out to be a bottleneck for wsgep288 (30 second ea => 75 min/scen)
-        # need to fix if NOT using nac to update E.
-        #=for cid in keys(condict)
-            if occursin("MathOptInterface.ScalarAffineFunction{Float64}", string(typeof(condict[cid][3])))
-                for term in 1:length(condict[cid][3].terms)
-                    if vid == condict[cid][3].terms[term].variable_index.value
-                        concoeff = condict[cid][3].terms[term].coefficient
-                        #tuple = (cid, concoeff)
-                        #push!(conval,tuple)
-                        conval[cid] = concoeff
-                    end
-                end
-                #SingleVariable
-            elseif occursin("MathOptInterface.ScalarAffineTerm", string(typeof(condict[cid][3])))
-                if vid == condict[cid][3].variable.value
-                    println("it appears! :O")
-                    # this is not added to the variable class, as it is assumed bounds will be in the first stage
-                    #println(typeof(condict[cid][3]),cid)
-                end
-            else
-                #println(typeof(condict[cid][3]))
-            end
-        end=#
-        #varstructs[vid] = LocalVariableInfo(vid, vname, nothing, cost, conval, nothing, nothing)
-        varstructs[vid] = LocalVariableInfo(vid, vname, nothing, cost, nothing, 0.0, nothing)
+        varstructs[vid] = LocalVariableInfo(vid, vname, nothing, 0.0, nothing, 0.0, nothing)
     end
 
     return varstructs
 end
 
-function make_LinkedConstraintInfo(varstructs, condict)
-        
-    linkedcons = Dict()
-    for var in keys(varstructs)
-        convals = varstructs[var].conval
-        for (cid, cval) in convals
-            if cid in keys(linkedcons)
-                #needs to be pushed to add for other variables
-                #println(cid)
-                #unchecked
-                push!(linkedcons[cid].variables, var)
-            else
-                if occursin("MathOptInterface.EqualTo{Float64}", string(constraint_object(condict[cid][4]).set))
-                    val = constraint_object(condict[cid][4]).set.value
-                    linkedcons[cid] = LinkedConstraintInfo(condict[cid][5], 
-                                                            condict[cid][1], 
-                                                            condict[cid][2], 
-                                                            condict[cid][4], [var], val, val)
-                elseif occursin("MathOptInterface.GreaterThan{Float64}",string(constraint_object(condict[cid][4]).set))
-                    val = constraint_object(condict[cid][4]).set.lower
-                    linkedcons[cid] = LinkedConstraintInfo(condict[cid][5], 
-                                                                condict[cid][2], condict[cid][3], condict[cid][4], [var], val, val)
-                elseif occursin("MathOptInterface.LessThan{Float64}",string(constraint_object(condict[cid][4]).set))
-                    val = constraint_object(condict[cid][4]).set.upper
-                    linkedcons[cid] = LinkedConstraintInfo(condict[cid][5], 
-                                                                condict[cid][2], condict[cid][3], condict[cid][4], [var], val, val)
-                else
-                    # change this to a warning eventually
-                    #println(condict[cid][4])
-                    println("Add ", string(constraint_object(condict[cid][4]).set), " to initialization. con: $(condict[cid][4])")
-                end
-            end
-        end
-    end
-    
-    return linkedcons
-end
 
 function stage_name_idx(model::JuMP.Model, vardict)
         
     vdict = Dict()
     vdict[1]=Dict()
     vdict[2]=Dict()
-    #vdict[3]=[]
     vardict_array = [];
     for varinfo in vardict[1]
         push!(vardict_array, varinfo[1])
@@ -167,8 +100,6 @@ function stage_name_idx(model::JuMP.Model, vardict)
         else #if occursin("Thsp", name)
             val = JuMP.variable_by_name(model, name).index.value
             vdict[2][name] = val
-        #else
-        #    push!(vdict[3], name)
         end
     end
     return vdict
@@ -179,28 +110,11 @@ function initialize(model, vnames)
     println("...making stage_name_idx...")
     vardict = stage_name_idx(model, vnames)
     
-    #vrm1, vindtoref, varcost, condict, Ae, Al, Ag, Ie, Il, Ig = make_dicts_and_arrays(model);
     println("...Making dicts and arrays...")
     vrm1, vindtoref, varcost, condict = make_dicts_and_arrays(model);
     
     println("...making variable_info...") #TODO fix the bottleneck here. 
     varstructs = make_VariableInfo(vardict, varcost, condict);
-    
-    #arrays = create_eq_lt_gt_arrays(m,condict,vindtoref, varstructs)
-    
-    #println("...making constraint_info...")
-    #linkedcons = make_LinkedConstraintInfo(varstructs, condict)
-    
-    #for i in 1:length(x_init)
-    #    varstructs[i].value = x_init[i]
-    #end
-    
-    #for name in keys(vardict[1])
-    #    var = JuMP.variable_by_name(model, name)
-    #    delete(model, var)
-    #end
-    
-    #arrays = Arrays(Ae, Al, Ag, Ie, Il, Ig)
     
     return model, varstructs, vardict[1], 0
     
@@ -238,9 +152,6 @@ function ConToIdx(m)
            if occursin("AffExpr",string(F))
                 innercount +=1
                 count += 1
-                # this may have to change because of how JuMP stores things. we'll see.
-                # values are being overwritten in 1.6 because of the way MOI Indexes things
-                #contoidx[con.index.value] = count
                 contoidx[(F,S,innercount)] = count
            end
         end
@@ -370,15 +281,15 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, v
 
     end
     
-    contoidx, count = ConToIdx(subprob[1].model)
+    #contoidx, count = ConToIdx(subprob[1].model)
     
-    h = compute_h(models, contoidx, count)
+    #h = compute_h(models, contoidx, count)
 
     firststagevars = Dict()
 
     for index in 1:length(v_dict[1])
         var = v_dict[1][index]
-        firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3], nothing)
+        firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3])
     end
 
     firststage = FirstStageInfo(firststagevars, subprob, store);
@@ -417,7 +328,7 @@ function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, stor
 
     for index in 1:length(v_dict[1])
         var = v_dict[1][index]
-        firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3], nothing)
+        firststagevars[var[1]] = FirstStageVariableInfo(var[1], index, var[4], nothing, var[2], var[3])
     end
 
     firststage = FirstStageInfo(firststagevars, subprob, store);

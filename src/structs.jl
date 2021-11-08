@@ -23,7 +23,7 @@ mutable struct Subproblems
     model::Any
     probability::Float64
     variableinfo::Any
-    ncons::Any
+    ncons::Any #remove
     linkedconstraintinfo::Any
     vnametoind::Dict
     arrays::Any
@@ -45,14 +45,7 @@ mutable struct SubproblemsNew
     objective_value::Any
 end
 
-mutable struct Arrays
-    Ae::Any
-    Al::Any
-    Ag::Any
-    Ie::Any
-    Il::Any
-    Ig::Any
-end
+
 
 # More stuff stored here like convergence criteria, etc stored here
 mutable struct FirstStageInfo
@@ -74,5 +67,4 @@ mutable struct FirstStageVariableInfo
     gradient::Union{Float64,Nothing}
     lowerbound::Union{Float64,Nothing}
     upperbound::Union{Float64,Nothing}
-    status::Any
 end
