@@ -12,11 +12,6 @@ L_Shaped_Algorithm
 		compute_h*
 		initialize*
 			stage_name_idx*
-			make_dicts_and_arrays* #?
-				varRefToIdx* #?
-				varIdxToRef* #?
-				varIdxToCost* #?
-				conIdxToRef* #?
 			make_VariableInfo*
 				LocalVariableInfo***
 		update_constraint_values_nac!**(in algorithm.jl)
@@ -53,7 +48,6 @@ FirstStage	.variables[v]*	.name
 				.gradient
 				.lowerbound # 
 				.upperbound #
-				(.cost)
 
 		.problems[s]*	.id
 				.model
@@ -62,21 +56,9 @@ FirstStage	.variables[v]*	.name
 					.id
 					.name
 					.index
-					(.cost) #change to first stage 
-					.conval
 					.value
 					.gradient
-				.ncons ## should be changed/contoidx works now.
-				.linkedconstraintinfo ?what is here
-					.id
-					.func
-					.set
-					.ref
-					.variables
-					.initvalues
-					.curvalue
-				.vnametoind updates linked variables KEEP
-				.arrays #* ?what is here
+				.vnametoind 
 				.objective_value
 
 		or 
@@ -85,13 +67,11 @@ FirstStage	.variables[v]*	.name
 				.model
 				.probability
 				.variableinfo
-				.linkedconstraintinfo
 				.idxtocon
 				.h
 				.Ek
 				.ek
 				.vnametoind
-				.arrays #*
 				.objective_value
 
 		.store

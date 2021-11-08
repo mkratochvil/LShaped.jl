@@ -36,7 +36,7 @@ function bl2(sid)
 end
 
 
-blv = Dict()
+blv = Dict{Int64,Array{Any}}()
 
 blv[1] = [("x1", 40, Inf, 40), ("x2", 20, Inf, 20)]
 blv[2] = ["y1", "y2"]

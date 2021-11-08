@@ -21,7 +21,8 @@ include("algorithm.jl")
         tol = 1e-6, 
         maxiter=10, 
         probs = 1/N*ones(N);
-        store = nothing)
+        store = nothing
+        verbose = 0)
 
 **Arguments**
 
@@ -35,16 +36,17 @@ include("algorithm.jl")
 **Keyword Arguments**
 
 * `store` : defaults to nothing. enter in string path to store L-Shaped information: x, E and e (and their local summands), w, theta
+* `verbose` : defaults to 0. If not 0, displays updates to x, E, e, and grad.
 """
-function L_Shaped_Algorithm(subproblem_generator, 
-                            v_dict, 
-                            N, 
-                            master_generator, 
-                            tol = 1e-6, 
-                            maxiter=10, 
-                            probs = 1/N*ones(N);
-                            store = nothing,
-                            verbose = 0)
+function L_Shaped_Algorithm(subproblem_generator::Function, 
+                            v_dict::Dict{Int64,Array{Any}}, 
+                            N::Int64, 
+                            master_generator::Function, 
+                            tol::Float64 = 1e-6, 
+                            maxiter::Int64=10, 
+                            probs::Array{Float64} = 1/N*ones(N);
+                            store::Union{String,Nothing} = nothing,
+                            verbose::Int64 = 0)
         
     firststage, contoidx, h = make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, verbose);
     
@@ -57,15 +59,15 @@ function L_Shaped_Algorithm(subproblem_generator,
 end
 
 
-function L_Shaped_Algorithm_new(subproblem_generator, 
-                            v_dict, 
-                            N, 
-                            master_generator, 
-                            tol = 1e-6, 
+function L_Shaped_Algorithm_new(subproblem_generator::Function, 
+                            v_dict::Dict{Int64,Array{Any}}, 
+                            N::Int64, 
+                            master_generator::Function, 
+                            tol::Float64 = 1e-6, 
                             maxiter=10, 
-                            probs = 1/N*ones(N);
-                            store = nothing,
-                            verbose = 0)
+                            probs::Array{Float64} = 1/N*ones(N);
+                            store::Union{String,Nothing} = nothing,
+                            verbose::Int64 = 0)
         
     firststage = make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store, verbose);
     

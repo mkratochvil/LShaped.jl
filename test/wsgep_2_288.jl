@@ -203,7 +203,7 @@ dfvar[size(dfvar,1),1]
 x_init = ones(150);
 
 function variable_dict_primal(varlist, x)
-    vdict = Dict{Int,Any}()
+    vdict = Dict{Int64,Array{Any}}()
     vdict[1]=[]
     vdict[2]=[]
     i = 0

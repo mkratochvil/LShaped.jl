@@ -1,4 +1,4 @@
-function update_constraint_values_nac!(model, varstructs)
+function update_constraint_values_nac!(model::JuMP.Model, varstructs::Dict{Int64,LocalVariableInfo})
     
     for var in keys(varstructs)
         name = varstructs[var].name
@@ -9,7 +9,7 @@ function update_constraint_values_nac!(model, varstructs)
     return
 end
     
-function update_gradients_nac!(model, varstructs)
+function update_gradients_nac!(model::JuMP.Model, varstructs::Dict{Int64,LocalVariableInfo})
     
     for var in keys(varstructs)
         name = varstructs[var].name
@@ -22,7 +22,7 @@ function update_gradients_nac!(model, varstructs)
     
 end
 
-function solve_sub_and_update!(subproblem)
+function solve_sub_and_update!(subproblem::Union{Subproblems,SubproblemsNew})
         
     varstructs = subproblem.variableinfo
     model = subproblem.model
@@ -39,7 +39,7 @@ function solve_sub_and_update!(subproblem)
     
 end
 
-function get_cost_vector(firststage, fsmodel)
+function get_cost_vector(firststage::FirstStageInfo, fsmodel::JuMP.Model)
         
     vardict = firststage.variables
     nvars = vardict.count
@@ -65,7 +65,7 @@ function get_cost_vector(firststage, fsmodel)
     
 end
 
-function update_first_gradient!(firststage)
+function update_first_gradient!(firststage::FirstStageInfo)
         
     for var in keys(firststage.variables)
         grad1 = 0.0;
@@ -84,7 +84,7 @@ function update_first_gradient!(firststage)
 end
 
 #eventually parallelize and put another function inside.
-function update_second_value!(firststage) 
+function update_second_value!(firststage::FirstStageInfo) 
     
     for var in keys(firststage.variables)
         for sub = keys(firststage.subproblems)
@@ -99,7 +99,7 @@ function update_second_value!(firststage)
     
 end
 
-function get_grad_vector(firststage)
+function get_grad_vector(firststage::FirstStageInfo)
         
     vardict = firststage.variables
     nvars = vardict.count
@@ -121,7 +121,7 @@ function get_grad_vector(firststage)
 end
 
 #Eventually make this from file.
-function get_value_vector(firststage)
+function get_value_vector(firststage::FirstStageInfo)
         
     vardict = firststage.variables
     nvars = vardict.count
@@ -142,7 +142,7 @@ function get_value_vector(firststage)
     
 end
 
-function get_objective_value(firststage)
+function get_objective_value(firststage::FirstStageInfo)
     
     objval = 0.0;
 
@@ -163,7 +163,7 @@ function get_objective_value(firststage)
 end
 
 #TODO make a dict so we know which constraints to adjust.
-function adjust_h(firststage, contoidx, h)
+function adjust_h(firststage::FirstStageInfo, contoidx::Dict{Any,Int64}, h::Matrix{Float64})
         
     models = firststage.subproblems
     
@@ -203,7 +203,7 @@ end
 
 #TODO since this only applies to interval constraints, classify constraints in subproblem by type, so it
 # does not have to parse through every constraint.
-function adjust_h_new!(subproblem)
+function adjust_h_new!(subproblem::Union{Subproblems,SubproblemsNew})
 
     idxtocon = subproblem.idxtocon
     h = subproblem.h
@@ -237,7 +237,7 @@ function adjust_h_new!(subproblem)
     return
 end
 
-function compute_e(firststage, h, PI)
+function compute_e(firststage::FirstStageInfo, h::Matrix{Float64}, PI::Matrix{Float64})
         
     e_k = 0.0;
     for i in keys(firststage.subproblems)
@@ -248,7 +248,7 @@ function compute_e(firststage, h, PI)
 end
     
 
-function compute_PI(firststage, contoidx)
+function compute_PI(firststage::FirstStageInfo, contoidx::Dict{Any,Int64})
         
     N = firststage.subproblems.count
     nc = contoidx.count
@@ -277,7 +277,7 @@ function compute_PI(firststage, contoidx)
 end
 ;
 
-function add_theta_to_objective!(fs)
+function add_theta_to_objective!(fs::JuMP.Model)
         
     @variable(fs, theta)
     obj_old = objective_function(fs)
@@ -288,7 +288,7 @@ function add_theta_to_objective!(fs)
 end
     
 
-function add_constraint_to_objective!(fs, E, e_k, v_dict)
+function add_constraint_to_objective!(fs::JuMP.Model, E::Array{Float64}, e_k::Float64, v_dict::Dict{Int64,Array{Any}})
         
     nvar = length(E)
     
@@ -300,7 +300,7 @@ function add_constraint_to_objective!(fs, E, e_k, v_dict)
 end
 
 
-function update_first_value_L!(firststage, fs)
+function update_first_value_L!(firststage::FirstStageInfo, fs::JuMP.Model)
         
     for vname in keys(firststage.variables)
         
@@ -314,7 +314,7 @@ function update_first_value_L!(firststage, fs)
     
 end
 
-function setup_1st_paths!(firststage)
+function setup_1st_paths!(firststage::FirstStageInfo)
     
     path = firststage.store
     vardict = firststage.variables
@@ -356,7 +356,7 @@ function setup_1st_paths!(firststage)
     return
 end
 
-function store_x!(firststage)
+function store_x!(firststage::FirstStageInfo)
     
     path = firststage.store
     xcsv = string(path, "x.csv")
@@ -375,7 +375,7 @@ function store_x!(firststage)
     
 end
 
-function store_E!(firststage, E)
+function store_E!(firststage::FirstStageInfo, E::Array{Float64})
     
     path = firststage.store
     Ecsv = string(path, "E.csv")
@@ -392,7 +392,7 @@ function store_E!(firststage, E)
     
 end
 
-function store_e!(firststage, e_k)
+function store_e!(firststage::FirstStageInfo, e_k::Float64)
     
     path = firststage.store
     ecsv = string(path, "ek.csv")
@@ -405,7 +405,7 @@ function store_e!(firststage, e_k)
     
 end
 
-function store_w_theta!(firststage, w, theta)
+function store_w_theta!(firststage::FirstStageInfo, w::Float64, theta::Float64)
     
     path = firststage.store
     wtcsv = string(path, "w_theta.csv")
@@ -418,7 +418,7 @@ function store_w_theta!(firststage, w, theta)
     
 end
 
-function setup_2nd_paths!(path, subproblem)
+function setup_2nd_paths!(path::String, subproblem::Union{Subproblems,SubproblemsNew})
     
     vardict = subproblem.variableinfo
     sid = subproblem.id
@@ -463,7 +463,7 @@ function setup_scen_path!(path::String, sid::Int64)
     
 end
 
-function store_Es_es!(path, subproblem, pi_k, h_k)
+function store_Es_es!(path::String, subproblem::Union{Subproblems,SubproblemsNew}, pi_k::Array{Float64}, h_k::Array{Float64})
            
     prob = subproblem.probability
     vardict = subproblem.variableinfo
@@ -506,7 +506,7 @@ function store_Es_es!(path, subproblem, pi_k, h_k)
 end
 
 
-function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, verbose)
+function iterate_L(firststage::FirstStageInfo, fs::JuMP.Model, contoidx::Dict, h::Matrix{Float64}, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64)
         
     x = 0
     
@@ -641,7 +641,7 @@ function iterate_L(firststage, fs, contoidx, h, v_dict, addtheta, tol, niter, ve
     
 end
 
-function compute_Ek_new!(subproblem)
+function compute_Ek_new!(subproblem::Union{Subproblems,SubproblemsNew})
     
     prob = subproblem.probability
     vardict = subproblem.variableinfo
@@ -665,7 +665,7 @@ function compute_Ek_new!(subproblem)
     
 end
 
-function compute_ek_new!(subproblem)
+function compute_ek_new!(subproblem::Union{Subproblems,SubproblemsNew})
     
     prob = subproblem.probability
     idxtocon = subproblem.idxtocon
@@ -688,7 +688,7 @@ function compute_ek_new!(subproblem)
     
 end
 
-function store_Ek_sub!(subproblem, path)
+function store_Ek_sub!(subproblem::Union{Subproblems,SubproblemsNew}, path::String)
     
     sid = subproblem.id
     Evec = subproblem.Ek
@@ -707,7 +707,7 @@ function store_Ek_sub!(subproblem, path)
     
 end
 
-function store_ek_sub!(subproblem, path)
+function store_ek_sub!(subproblem::Union{Subproblems,SubproblemsNew}, path::String)
     
     sid = subproblem.id
     ek = subproblem.ek
@@ -723,7 +723,7 @@ function store_ek_sub!(subproblem, path)
 end
     
 #as opposed to get_El_from_file to be made
-function get_El_from_sub!(firststage)
+function get_El_from_sub!(firststage::FirstStageInfo)
     
     subproblems = firststage.subproblems
     nvars = firststage.variables.count
@@ -738,7 +738,7 @@ function get_El_from_sub!(firststage)
     
 end
 
-function get_el_from_sub!(firststage)
+function get_el_from_sub!(firststage::FirstStageInfo)
     
     subproblems = firststage.subproblems
     
@@ -752,7 +752,7 @@ function get_el_from_sub!(firststage)
     
 end
 
-function iterate_L_new(firststage, fs, v_dict, addtheta, tol, niter, verbose)
+function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64)
         
     x = 0
     

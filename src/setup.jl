@@ -1,6 +1,6 @@
-function make_VariableInfo(vardict)
+function make_VariableInfo(vardict::Dict{Int64}{Dict{String,Int64}})
     
-    varstructs = Dict()
+    varstructs = Dict{Int64,LocalVariableInfo}()
     
     for vname in keys(vardict[1])
         vid = vardict[1][vname]
@@ -10,11 +10,12 @@ function make_VariableInfo(vardict)
     return varstructs
 end
 
-function stage_name_idx(model::JuMP.Model, vardict)
+function stage_name_idx(model::JuMP.Model, vardict::Dict{Int64,Array{Any}})
         
-    vdict = Dict()
-    vdict[1]=Dict()
-    vdict[2]=Dict()
+    vdict = Dict{Int64}{Dict{String,Int64}}()
+    vdict[1]=Dict{String,Int64}()
+    vdict[2]=Dict{String,Int64}()
+    
     vardict_array = [];
     for varinfo in vardict[1]
         push!(vardict_array, varinfo[1])
@@ -32,7 +33,7 @@ function stage_name_idx(model::JuMP.Model, vardict)
     return vdict
 end
 
-function initialize(model, vnames)
+function initialize(model::JuMP.Model, vnames::Dict{Int64,Array{Any}})
         
     println("...making stage_name_idx...")
     vardict = stage_name_idx(model, vnames)
@@ -44,7 +45,7 @@ function initialize(model, vnames)
     
 end
 
-function update_second_index!(firststage)
+function update_second_index!(firststage::FirstStageInfo)
     
     for var in keys(firststage.variables)
         for sub = keys(firststage.subproblems)
@@ -62,9 +63,9 @@ end
 
 # huge assumption that the subproblems will have the same constraint order.
 # this should be true for my problems, but still will not use when in parallel.
-function ConToIdx(m)
+function ConToIdx(m::JuMP.Model)
     
-    contoidx = Dict()
+    contoidx = Dict{Any,Int64}()
 
     count = 0
 
@@ -85,9 +86,9 @@ function ConToIdx(m)
     
 end
 
-function IdxToCon(m)
+function IdxToCon(m::JuMP.Model)
     
-    idxtocon = Dict()
+    idxtocon = Dict{Int64,JuMP.ConstraintRef}()
 
     count = 0
 
@@ -104,7 +105,7 @@ function IdxToCon(m)
     
 end
 
-function compute_h_new(model,idxtocon)
+function compute_h_new(model::JuMP.Model,idxtocon::Dict{Int64,JuMP.ConstraintRef})
 
     nc = idxtocon.count
     
@@ -138,7 +139,7 @@ function compute_h_new(model,idxtocon)
     return h
 end
 
-function compute_h(models, contoidx)
+function compute_h(models::Dict{Int64,JuMP.Model}, contoidx::Dict{Any,Int64})
     
     ns = models.count
     nc = contoidx.count
@@ -179,9 +180,9 @@ function compute_h(models, contoidx)
     
 end
 
-function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, verbose)
+function make_two_stage_setup_L(subproblem_generator::Function, v_dict::Dict{Int64,Array{Any}}, N::Int64, probs::Array{Float64}, store::Union{String,Nothing}, verbose::Int64)
     
-    models = Dict()
+    models = Dict{Int64,JuMP.Model}()
 
     for i = 1:N
         models[i] = subproblem_generator(i);
@@ -190,6 +191,7 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, v
     contoidx = ConToIdx(models[1])
     
     h = compute_h(models, contoidx)
+    println(typeof(h))
     
     subprob = Dict()
 
@@ -219,7 +221,7 @@ function make_two_stage_setup_L(subproblem_generator, v_dict, N, probs, store, v
 end
 
 
-function make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store, verbose)
+function make_two_stage_setup_L_new(subproblem_generator::Function, v_dict::Dict{Int64,Array{Any}}, N::Int64, probs::Array{Float64}, store::Union{String,Nothing}, verbose::Int64)
     
     subprob = Dict()
 
