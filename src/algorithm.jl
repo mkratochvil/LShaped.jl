@@ -752,7 +752,67 @@ function get_el_from_sub!(firststage::FirstStageInfo)
     
 end
 
-function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64)
+function load_current_fs!(model::JuMP.Model, E::DataFrame, ek::DataFrame, xvars::Vector{String}, curit::Int64)
+    
+    add_theta_to_objective!(model)
+    
+    nvars = length(xvars)
+    
+    for it = 1:curit
+        
+        El = collect(E[it,:])
+        el = ek[it,1]
+        
+        @constraint(model, sum(El[i]*variable_by_name(model, xvars[i]) for i = 1:nvars) 
+                        + variable_by_name(model, "theta") >= el)
+    
+    end
+    
+    return
+    
+end
+
+#TODO: add fs to firststage struct.
+function resume_fs!(firststage::FirstStageInfo, model::JuMP.Model, tol::Float64)
+    
+    converged = 0
+    #model = firststage.model
+    path = firststage.store
+    pathE = string(path, "E.csv")
+    pathe = string(path, "ek.csv")
+    pathx = string(path, "x.csv")
+    pathwt = string(path, "w_theta.csv")
+    
+    E = DataFrame(CSV.File(pathE))
+    ek = DataFrame(CSV.File(pathe))
+
+    w_theta = DataFrame(CSV.File(pathwt))
+    #perhaps temporary.
+    x = DataFrame(CSV.File(pathx))
+    
+    #double check command to exit the program
+    curit=0
+    if size(ek,1) == size(E,1) 
+        curit = size(ek,1)
+    else 
+        println("Error: Look into this dataset. The number of rows in x, Ek, and ek should match.")
+        return 0, 0, collect(x[curit,:])
+    end
+    
+    #check convergence
+    if w_theta[curit,2] >= w_theta[curit,1] - tol
+        converged = 1
+        return curit, converged, collect(x[curit,:])
+    end
+    
+    xvars = String.(names(E))
+    
+    load_current_fs!(model, E, ek, xvars, curit)
+    
+    return curit, converged, collect(x[curit,:])
+end
+
+function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64)
         
     x = 0
     
@@ -761,10 +821,28 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
         println("cost = $(cost)")
     end
     
+    curit = 0
+    if resume > 0
+        println("!!!!!!!!!!!!!! Resuming from iteration $(resume) using path $(firststage.store) !!!!!!!!!!!!!!")
+        addtheta = 1
+        #rebuild based on values of E and e
+        curit, converged, xcur = resume_fs!(firststage, fs, tol)
+        
+        if converged > 0
+            println("Model has already converged.")
+            
+            # 0 is placeholder for a better x or just having firststage hold everything
+            return xcur, firststage, fs, curit
+        end
+    end
+    
     for i = 1:niter
+        
+        itnum = i+curit
+        itmax = curit+niter
 
         # step 1 set v = v+1 and solve first stage problem.
-        println("Iteration $(i)")
+        println("Iteration $(itnum)/$(itmax)")
 
         optimize!(fs)
 
@@ -775,7 +853,7 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
         
         if firststage.store != nothing
         
-            if i == 1
+            if itnum == 1
                 if verbose == 1
                     println("Setting up First Stage paths...")
                 end
@@ -807,7 +885,7 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
                 #I will have to store this locally at some point...
                 path = firststage.store
                 
-                if i == 1
+                if itnum == 1
                     println("Setting up second stage paths...")
                     setup_scen_path!(path, sid)
                     

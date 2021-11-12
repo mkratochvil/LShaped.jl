@@ -391,7 +391,7 @@ function wsgep1()
 "m_EE[325_STORAGE_1]"
 ];
 
-    fs = Model(with_optimizer(Gurobi.Optimizer, OutputFlag = 1));
+    fs = Model(with_optimizer(Gurobi.Optimizer, OutputFlag = 0));
 
     x = Vector{VariableRef}()
     for i = 1:150

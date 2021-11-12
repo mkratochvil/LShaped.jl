@@ -67,13 +67,14 @@ function L_Shaped_Algorithm_new(subproblem_generator::Function,
                             maxiter=10, 
                             probs::Array{Float64} = 1/N*ones(N);
                             store::Union{String,Nothing} = nothing,
-                            verbose::Int64 = 0)
+                            verbose::Int64 = 0,
+                            resume::Int64 = 0)
         
     firststage = make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store, verbose);
     
     fs = master_generator()
     
-    ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter, verbose)
+    ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume)
     
     return x, firststage, fs, ittime, niter
     
