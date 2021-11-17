@@ -1,0 +1,10 @@
+first,second
+fsmodel,bl1
+ssmodel,bl2
+tol, 1e-6
+vardict,blv
+nsubs, 2
+converged,1
+ssscript,secondstagemodel.jl
+dir,./bl/
+fsscript,firststagemodel.jl

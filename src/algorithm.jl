@@ -314,6 +314,7 @@ function update_first_value_L!(firststage::FirstStageInfo, fs::JuMP.Model)
     
 end
 
+#to do, update so that w and theta are completely separate.
 function setup_1st_paths!(firststage::FirstStageInfo)
     
     path = firststage.store
@@ -335,6 +336,7 @@ function setup_1st_paths!(firststage::FirstStageInfo)
     
     df = DataFrame()
     dfe = DataFrame(econst = Float64[])
+    dft = DataFrame(theta = Float64[])
     dfwt = DataFrame(w = Float64[], theta = Float64[])
     
     for i = 1:nvars
@@ -346,11 +348,14 @@ function setup_1st_paths!(firststage::FirstStageInfo)
     xcsv = string(path, "x.csv")
     Ecsv = string(path, "E.csv")
     ecsv = string(path, "ek.csv")
+    #tcsv used to store just the theta value in async. Not used in serial/synchronous coding
+    tcsv = string(path, "theta.csv")
     wtcsv = string(path, "w_theta.csv")
     
     CSV.write(xcsv, df)
     CSV.write(Ecsv, df)
     CSV.write(ecsv, dfe)
+    CSV.write(tcsv, dft)
     CSV.write(wtcsv, dfwt)
     
     return
@@ -412,6 +417,32 @@ function store_w_theta!(firststage::FirstStageInfo, w::Float64, theta::Float64)
     
     open(wtcsv, "a") do io
         write(io, "$(w), $(theta) \n")
+    end
+    
+    return
+    
+end
+
+function store_theta!(firststage::FirstStageInfo, theta::Float64)
+    
+    path = firststage.store
+    tcsv = string(path, "theta.csv")
+    
+    open(tcsv, "a") do io
+        write(io, "$(theta) \n")
+    end
+    
+    return
+    
+end
+
+function store_w!(firststage::FirstStageInfo, w::Float64)
+    
+    path = firststage.store
+    wcsv = string(path, "w.csv")
+    
+    open(wcsv, "a") do io
+        write(io, "$(w) \n")
     end
     
     return
@@ -738,6 +769,40 @@ function get_El_from_sub!(firststage::FirstStageInfo)
     
 end
 
+#possibly inefficient. WIll fix if get to be too slow.
+# put back in firststage once in algorithms.
+function get_El_from_file_and_save!(firststage::FirstStageInfo, model::JuMP.Model, path::String, nsubs::Int64)
+    
+    vardict = firststage.variables
+    nvars = vardict.count
+    
+    El = LShaped.get_cost_vector(firststage, model)
+    
+    for sid = 1:nsubs
+        Epath = string(path, "scen_$(sid)/E.csv")
+        Edf = DataFrame(CSV.File(Epath))
+                
+        Esub = collect(Edf[size(Edf,1),:])
+        
+        El += Esub
+        
+    end
+    
+    Ecsv = string(path, "E.csv")
+        
+    sE = string(El)
+    n = length(string(El))
+
+    sE = sE[2:n-1]
+    open(Ecsv, "a") do io
+        write(io, "$(sE) \n")
+    end
+    
+    return El
+    
+end
+
+
 function get_el_from_sub!(firststage::FirstStageInfo)
     
     subproblems = firststage.subproblems
@@ -746,6 +811,33 @@ function get_el_from_sub!(firststage::FirstStageInfo)
     
     for sid in keys(subproblems)
         el += subproblems[sid].ek
+    end
+    
+    return el
+    
+end
+
+# path should be path that contains the scen_# directories
+function get_el_from_file_and_save!(path::String, nsubs::Int64)
+    
+    el = 0.0
+    
+    for i = 1:nsubs
+        epath = string(path, "scen_$(i)/ek.csv")
+        
+        #open as a dataframe, as you are using DataFrames package anyway. More efficient to load in last row, though.
+        edf = DataFrame(CSV.File(epath))
+        
+        nrows = size(edf,1)
+        
+        el += edf[nrows, 1]
+        
+    end
+    
+    ecsv = string(path, "ek.csv")
+        
+    open(ecsv, "a") do io
+        write(io, "$(el) \n")
     end
     
     return el
@@ -769,6 +861,30 @@ function load_current_fs!(model::JuMP.Model, E::DataFrame, ek::DataFrame, xvars:
     end
     
     return
+    
+end
+
+function get_x_from_file(path::String)
+    
+    xpath = string(path, "x.csv")
+    
+    xdf = DataFrame(CSV.File(xpath))
+    
+    x = collect(xdf[size(xdf,1),:])
+    
+    return x
+    
+end
+
+function get_theta_from_file(path::String)
+    
+    tpath = string(path, "theta.csv")
+    
+    tdf = DataFrame(CSV.File(tpath))
+    
+    theta = tdf[size(tdf,1),1]
+    
+    return theta
     
 end
 

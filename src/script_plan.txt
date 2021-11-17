@@ -1,0 +1,56 @@
+*** Setup parameters ***
+
+There should be a file structure that includes anything that needs to be built in (e.g. functions to build the model). 
+Outside of julia can be stored within the job submission/bash script. Inside of julia should be stored as a csv or other external file.
+
+** Outside of julia **
+
+* Max Iterations
+* Number of subproblems
+* info file name/location
+* (more potentially)
+
+
+** Inside of julia **
+
+* file name (to be saved at)
+* first stage model constructor script .jl file location.
+* second stage model constructor script .jl file location.
+* solver (e.g. Gurobi)
+
+
+*** First Stage to/from file notes ***
+
+-Check if file exists.
+	+If not, create.
+	-If so:
+		-Update E, e, and w from second stage stuff
+		-Check for convergence by comparing w, theta in last line of file.
+			-if convergence
+				-quit
+			-else
+				-continue
+
++Load in first stage vdict and model (not second stage!!)
+
++Create firststage struct
+
+
+# figure out how to do this with current file structure.
+# do NOT need second stage stuff.
+-Solve model for new x.
+
+Save x to file.
+
+
+*** Second stage to/from file notes ***
+
+Check if file exits.
+	If not
+		terminate. file structure needs to be made in first stage.
+	If so, grab x and use it to build model.
+
+Build subproblem based on environmental variable arrayid (this will be built in while prototyping outside of cluster).
+
+
+
