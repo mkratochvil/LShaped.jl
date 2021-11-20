@@ -928,6 +928,92 @@ function resume_fs!(firststage::FirstStageInfo, model::JuMP.Model, tol::Float64)
     return curit, converged, collect(x[curit,:])
 end
 
+function save_cur_duals!(path::String, subproblem::SubproblemsNew, curit::Int64)
+    
+    idxtocon = subproblem.idxtocon
+    
+    #the indexes should start from 1 and go to end
+    count = idxtocon.count
+    
+    connums = [];
+    dualvals = [];
+    
+    for i = 1:count
+        
+        push!(connums, i)
+        
+        con = idxtocon[i]
+        push!(dualvals, JuMP.dual(con))
+        
+    end
+        
+    ddf = DataFrame(conidx=connums, dualval=dualvals)
+        
+    conpath = string(path, "con_$(curit).csv")
+    CSV.write(conpath, ddf)
+    
+    return
+end
+
+# stopped here 11/19 3:21 PM
+# path should be path ..scen_(sid)/ for second stage problems
+# path should be ..data/ for for firststage problems
+function save_cur_vars!(path::String, model::JuMP.Model, curit::Int64)
+        
+    vars = JuMP.all_variables(model)
+    vals = Vector{Float64}(undef, size(vars,1))
+    
+    for i = 1:size(vars,1)
+        vals[i] = JuMP.value(vars[i])
+    end
+    
+    varpath = string(path, "var_$(curit).csv")
+    
+    vdf = DataFrame(variables = vars, values = vals)
+    
+    CSV.write(varpath, vdf)
+    
+    return
+end
+
+function warmstart(subproblem::SubproblemsNew, curit::Int64, path::String)
+    
+    model = subproblem.model
+    idxtocon = subproblem.idxtocon
+    
+    varcsvname = string(path, "var_$(curit).csv")
+    concsvname = string(path, "con_$(curit).csv")
+
+    vdf = DataFrame(CSV.File(varcsvname))
+    #cdf = DataFrame(CSV.File(concsvname))
+    
+    for i = 1:size(vdf,1)
+        
+        #when saving to file, type is String31 for some reason.
+        vname = ""
+        for s = 1:length(vdf[i,1])
+            vname = string(vname,vdf[i,1][s])
+        end
+        
+        vref = JuMP.variable_by_name(model, vname)
+        JuMP.set_start_value(vref, vdf[i,2])
+        
+    end
+    #=
+    for i = 1:size(cdf,1)
+        
+        cref = idxtocon[cdf[i,1]]
+        JuMP.set_dual_start_value(cref, cdf[i,2])
+        
+    end
+    =#
+    
+    return
+    
+end
+    
+    
+
 function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64)
         
     x = 0
@@ -1025,17 +1111,25 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
             println("For subproblem $(sid)..")
             subproblem = firststage.subproblems[sid]
             println("...adjusting h...")
-            adjust_h_new!(subproblem) #done
+            adjust_h_new!(subproblem) 
             #see current Ek_ek folder)
             println("...computing Ek...")
-            compute_Ek_new!(subproblem) #done
+            compute_Ek_new!(subproblem) 
             println("...computing ek...")
-            compute_ek_new!(subproblem) #done
+            compute_ek_new!(subproblem) 
             
             if firststage.store != nothing
                 println("Storing Ek and ek...")
-                store_Ek_sub!(subproblem, firststage.store) #done
-                store_ek_sub!(subproblem, firststage.store) #done
+                store_Ek_sub!(subproblem, firststage.store) 
+                store_ek_sub!(subproblem, firststage.store) 
+                
+                println("...saving primal variables...")
+                sid = subproblem.id
+                path_id = string(firststage.store, "scen_$(sid)/")
+                save_cur_vars!(path_id, subproblem.model, itnum)
+                
+                println("...saving dual variables...")
+                save_cur_duals!(path_id, subproblem, itnum)
             end
         end
                     

@@ -44,7 +44,7 @@ if converged == 0
     model2, varstructs, vnametoidx = LShaped.initialize(model2, vardict)
 
     println("Creating subprob[$(arrayid)] struct...")
-    subprob = LShaped.SubproblemsNew(arrayid, model2, 0.6, varstructs, idxtocon, h, 
+    subprob = LShaped.SubproblemsNew(arrayid, model2, 0.5, varstructs, idxtocon, h, 
             nothing, nothing, vnametoidx, nothing)
 
     firststagevars = Dict()
@@ -81,6 +81,12 @@ if converged == 0
         value = xpathdict[var]
         sub.variableinfo[vind].value = value
     end
+    
+    ## warm-start attempt here. ##
+    path_id = string(dataloc, "scen_$(arrayid)/")
+    if curit > 1
+        LShaped.warmstart(firststage.subproblems[arrayid], curit-1, path_id)
+    end
 
     LShaped.solve_sub_and_update!(firststage.subproblems[arrayid])
     
@@ -99,6 +105,10 @@ if converged == 0
 
     LShaped.store_Ek_sub!(subproblem, dataloc)
     LShaped.store_ek_sub!(subproblem, dataloc)
+    
+    path_id = string(dataloc, "scen_$(arrayid)/")
+    LShaped.save_cur_vars!(path_id, subproblem.model, curit)
+    LShaped.save_cur_duals!(path_id, subproblem, curit)
     
 else
     println("Yay It worked")

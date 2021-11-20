@@ -27,9 +27,9 @@ else
 	println("BL Old Test FAILED!!! $(blt)")
 end
 =#
-
-#blxn, blfstructn, blfsmodeln = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 3, [0.4, 0.6]; store="./bl_data_new/", #verbose=1, resume=0);
 #=
+#blxn, blfstructn, blfsmodeln = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 3, [0.4, 0.6]; store="./bl_data_new/", #verbose=1, resume=0);
+
 blxn, blfstructn, blfsmodeln = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]; store="./bl_data_new/", verbose=1, resume=1);
 
 bltn = norm(blxtest-blxn)
@@ -40,7 +40,7 @@ else
 end
 =#
 
-
+#=
 wsgepx, wsgepfsstruct, wsgepfsmodel = @suppress LShaped.L_Shaped_Algorithm(wsgep2, wsgepv, 2, wsgep1, 1e-6, 100; store="./ws_data/");
 
 wsgept = norm(wsgepxtest-wsgepx)
@@ -49,8 +49,8 @@ if wsgept < tol
 else
 	println("WSGEP Old Test FAILED!!! $(wsgept)")
 end
-#=
-wsgepxn, wsgepfsstructn, wsgepfsmodeln = @suppress LShaped.L_Shaped_Algorithm_new(wsgep2, wsgepv, 2, wsgep1, 1e-6, 100; store="./ws_data_new/");
+=#
+wsgepxn, wsgepfsstructn, wsgepfsmodeln = @suppress LShaped.L_Shaped_Algorithm_new(wsgep2, wsgepv, 2, wsgep1, 1e-6, 10; store="./ws_data_new/");
 
 wsgeptn = norm(wsgepxtest-wsgepxn)
 if wsgeptn < tol
@@ -58,8 +58,8 @@ if wsgeptn < tol
 else
 	println("WSGEP New Test FAILED!!! $(wsgeptn)")
 end
-=#
 
+#=
 xpause = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.040444786119284, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 20.9746459833302, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.264501879667551, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 4.79094469682893, 0.0, 0.0, 0.0, 0.0, 3.5420215765336325, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 xpauset, wsgepfsstructn, wsgepfsmodeln = LShaped.L_Shaped_Algorithm_new(wsgep2, wsgepv, 2, wsgep1, 1e-6, 25; store="./ws_data_new/");
@@ -79,3 +79,4 @@ if wsgeptn < tol
 else
 	println("WSGEP New Test FAILED!!! $(wsgeptn)")
 end
+=#
