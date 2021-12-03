@@ -49,16 +49,17 @@ if converged == 0 || ispath(dataloc) == 0
         El = LShaped.get_El_from_file_and_save!(firststage, model, dataloc, nsubs)
         x = LShaped.get_x_from_file(dataloc)
         
-        wsgepxtest = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1.757008472,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,35.3516819,0,0,0,
+        #=wsgepxtest = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1.757008472,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,35.3516819,0,0,0,
 0,0,0,0,0,0,0,0.254070409,0,0,0,0,0,0,3.565270862,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
         
         println("..........solution difference: $(norm(x-wsgepxtest))")
-        
+        =#
         theta = LShaped.get_theta_from_file(dataloc)
         
         w = el - dot(El,x) 
                 
+        println("..........w-theta difference: $(w)-$(theta) = $(w-theta).................")
         LShaped.store_w_theta!(firststage, w, theta)
 
         curit, converged, xcur = LShaped.resume_fs!(firststage, model, tol)

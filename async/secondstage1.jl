@@ -111,6 +111,10 @@ if converged == 0
     path_id = string(dataloc, "scen_$(arrayid)/")
     LShaped.save_cur_vars!(path_id, subproblem.model, curit)
     LShaped.save_cur_duals!(path_id, subproblem, curit)
+
+    #println(JuMP.solution_summary(subproblem.model, verbose=true))
+    println(".........Primal dual difference = 
+        $(JuMP.objective_value(subproblem.model) - JuMP.dual_objective_value(subproblem.model)).........")
     
 else
     println("Yay It worked")
