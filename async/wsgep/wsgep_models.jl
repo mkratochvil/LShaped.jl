@@ -1,10 +1,4 @@
-using JuMP
-using Gurobi
-using CSV
-using DataFrames
 using OrderedCollections
-
-using LShaped
 
 function create_model_var_obj(dfvar)
     
@@ -18,9 +12,24 @@ function create_model_var_obj(dfvar)
         end
 
         vname31 = dfvar[i,2]
-        vlb = dfvar[i,3]
-        vub = dfvar[i,4]
-        cost = dfvar[i,5]
+        if occursin("#NAME", string(dfvar[i,3]))
+            vlb = -Inf
+        elseif string(typeof(dfvar[i,3])) == "Float64"
+            vlb = dfvar[i,3]
+        else
+            vlb = parse(Float64,dfvar[i,3])
+        end
+        if string(typeof(dfvar[i,4])) == "Float64"
+            vub = dfvar[i,4]
+        else
+            vub = parse(Float64,dfvar[i,4])
+        end
+        if string(typeof(dfvar[i,5])) == "Float64"
+            cost = dfvar[i,5]
+        else
+            cost = parse(Float64,dfvar[i,5])
+        end
+            
         
 	#attempt to change vname::String31 to String
 	vname = ""
@@ -165,7 +174,7 @@ end
 # creates the model whose info is stored in "dir/scenid"
 function wsgep2(scenid)
     
-    dir = "../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
+    dir = "../../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
     
     varfile = string(dir, scenid, "/vars_eff.csv")
     confile = string(dir, scenid, "/cons_eff.csv")
@@ -188,7 +197,7 @@ function wsgep2(scenid)
 end
 
 
-dir = "../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
+dir = "../../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
 
 scenid = 1
 
@@ -391,6 +400,80 @@ function wsgep1()
 "m_EE[325_STORAGE_1]"
 ];
 
+stcost = [1.09831446,
+1.098981127,
+1.099647793,
+1.10031446,
+1.100981127,
+1.101647793,
+1.10231446,
+1.102981127,
+1.103647793,
+1.10431446,
+1.104981127,
+1.105647793,
+1.10631446,
+1.106981127,
+1.107647793,
+1.10831446,
+1.108981127,
+1.109647793,
+1.11031446,
+1.110981127,
+1.111647793,
+1.11231446,
+1.112981127,
+1.113647793,
+1.09831446,
+1.098981127,
+1.099647793,
+1.10031446,
+1.100981127,
+1.101647793,
+1.10231446,
+1.102981127,
+1.103647793,
+1.10431446,
+1.104981127,
+1.105647793,
+1.10631446,
+1.106981127,
+1.107647793,
+1.10831446,
+1.108981127,
+1.109647793,
+1.11031446,
+1.110981127,
+1.111647793,
+1.11231446,
+1.112981127,
+1.113647793,
+1.097981127,
+1.098647793,
+1.09931446,
+1.099981127,
+1.100647793,
+1.10131446,
+1.101981127,
+1.102647793,
+1.10331446,
+1.103981127,
+1.104647793,
+1.10531446,
+1.105981127,
+1.106647793,
+1.10731446,
+1.107981127,
+1.108647793,
+1.10931446,
+1.109981127,
+1.110647793,
+1.11131446,
+1.111981127,
+1.112647793,
+1.11331446,
+1.113981127];
+    
     fs = Model(with_optimizer(Gurobi.Optimizer, OutputFlag = 0));
 
     x = Vector{VariableRef}()
@@ -398,7 +481,8 @@ function wsgep1()
         push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0, upper_bound = 1000.0))
     end
     
-    @objective(fs, Min, sum(0.9040815000000001*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
+    @objective(fs, Min, sum(0.9040815*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))
+    #@objective(fs, Min, sum(0.9040815*x[i] for i = 1:77)+sum(stcost[i-77]*x[i] for i = 78:150))
     #@objective(fs, Min, 0.0)
         
     return fs

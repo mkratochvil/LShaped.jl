@@ -1,0 +1,12 @@
+# Resuming caused wsgep test to run even more iterations than starting at beginning.
+ # My suspicision is it has to do with degeneracy of storage vars.
+
+- fix h adjustment
+
+- remove distracting prints
+
+- move where the output folders get stored to test.
+
+- make functionality in test between two values (so you do not have to re-make for loop every time).
+
+- Add model, curit, and other relevant info to firststage struct.
