@@ -405,4 +405,41 @@ function wsgep1()
     
 end
 
+# below is a relaxation to find a lower bound in the initial step.
+# creates the model whose info is stored in "dir/scenid" 
+function wsgepr(scenid)
+    
+    dir = "../ScenarioPrimal/ScenarioPrimal/jumpmodels/wsgep/twostage/ts3/"
+    
+    varfile = string(dir, scenid, "/vars_eff.csv")
+    confile = string(dir, scenid, "/cons_eff.csv")
+    matfile = string(dir, scenid, "/mat_eff.csv")
+
+    println("Loading in variable dataframe...")
+    dfvar = DataFrame(CSV.File(varfile));
+    println("Loading in constraint dataframe...")
+    dfcon = DataFrame(CSV.File(confile));
+    println("Loading in constraint matrix...")
+    dfmat = DataFrame(CSV.File(matfile));
+    
+    println("Creating model...")
+    model = create_model_var_obj(dfvar);
+    
+    add_model_cons!(model, dfvar, dfcon, dfmat)
+    
+    for i = 1:length(JuMP.all_variables(model))
+        
+        var = JuMP.all_variables(model)[i]
+        
+        name = string(var)
+        
+        if occursin("m_EE", name) || occursin("r_WE", name)
+            @constraint(model, var >= 0.0)
+        end
+        
+    end
+    return model
+    
+end
+
 

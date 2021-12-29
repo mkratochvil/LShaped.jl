@@ -1,5 +1,5 @@
 #todo: change this to the arrayid env variable in cluster
-arrayid = 1
+arrayid = 3
 
 using LShaped
 

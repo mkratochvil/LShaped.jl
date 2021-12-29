@@ -77,6 +77,17 @@ if converged == 0 || ispath(dataloc) == 0
         
         curit += 1
         println("curit = $(curit)")
+        
+        #hard coding lower bound for a proof of concept.
+        #if curit == 1
+        #    LShaped.add_theta_to_objective!(model)
+        #end
+        
+        #LShaped.add_lower_bound_to_first_stage!(model, 87.78383488823419)
+        
+        #if curit == 2
+        #    print(model)
+        #end
 
         JuMP.optimize!(model)
 

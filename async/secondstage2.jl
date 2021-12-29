@@ -1,6 +1,8 @@
 #todo: change this to the arrayid env variable in cluster
 arrayid = 2
 
+using LShaped
+
 #this would be an external variable
 infoloc = "./info.csv"
 
@@ -44,7 +46,7 @@ if converged == 0
     model2, varstructs, vnametoidx = LShaped.initialize(model2, vardict)
 
     println("Creating subprob[$(arrayid)] struct...")
-    subprob = LShaped.SubproblemsNew(arrayid, model2, 0.5, varstructs, idxtocon, h, 
+    subprob = LShaped.SubproblemsNew(arrayid, model2, 1/12, varstructs, idxtocon, h, 
             nothing, nothing, vnametoidx, nothing)
 
     firststagevars = Dict()
@@ -83,13 +85,12 @@ if converged == 0
     end
     
     ## warm-start attempt here. ##
-    path_id = string(dataloc, "scen_$(arrayid)/")
-    if curit > 1
-        LShaped.warmstart(firststage.subproblems[arrayid], curit-1, path_id)
-    end
+    #path_id = string(dataloc, "scen_$(arrayid)/")
+    #if curit > 1
+    #    LShaped.warmstart(firststage.subproblems[arrayid], curit-1, path_id)
+    #end
 
     LShaped.solve_sub_and_update!(firststage.subproblems[arrayid])
-    
     LShaped.update_second_index!(firststage)
 
     if size(x,1) == 1
@@ -97,6 +98,7 @@ if converged == 0
         LShaped.setup_2nd_paths!(dataloc, firststage.subproblems[arrayid])
     end
     
+
 
     subproblem = firststage.subproblems[arrayid]
     LShaped.adjust_h_new!(subproblem) 
@@ -106,13 +108,14 @@ if converged == 0
     LShaped.store_Ek_sub!(subproblem, dataloc)
     LShaped.store_ek_sub!(subproblem, dataloc)
     
-    path_id = string(dataloc, "scen_$(arrayid)/")
-    LShaped.save_cur_vars!(path_id, subproblem.model, curit)
-    LShaped.save_cur_duals!(path_id, subproblem, curit)
-    
+    #path_id = string(dataloc, "scen_$(arrayid)/")
+    #LShaped.save_cur_vars!(path_id, subproblem.model, curit)
+    #LShaped.save_cur_duals!(path_id, subproblem, curit)
+
     #println(JuMP.solution_summary(subproblem.model, verbose=true))
-    println(".........Primal dual difference = 
-        $(JuMP.objective_value(subproblem.model) - JuMP.dual_objective_value(subproblem.model)).........")
+    #println(".........Primal dual difference = 
+    #    $(JuMP.objective_value(subproblem.model) - JuMP.dual_objective_value(subproblem.model)).........")
+    
 else
     println("Yay It worked")
     
