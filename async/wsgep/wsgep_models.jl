@@ -478,7 +478,7 @@ stcost = [1.09831446,
 
     x = Vector{VariableRef}()
     for i = 1:150
-        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0, upper_bound = 1000.0))
+        push!(x, @variable(fs, base_name = names[i], lower_bound = 0.0, #=upper_bound = 1000.0=#))
     end
     
     @objective(fs, Min, sum(0.9040815*x[i] for i = 1:77)+sum(1.1059811266666666*x[i] for i = 78:150))

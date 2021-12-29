@@ -1011,10 +1011,19 @@ function warmstart(subproblem::SubproblemsNew, curit::Int64, path::String)
     return
     
 end
-    
-    
 
-function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64)
+#to do: determine the first stage values and subtract off 1st stage part before inputting a lower bound.
+function add_lower_bound_to_first_stage!(model::JuMP.Model, lowerbound::Float64)
+   
+    obj_func = JuMP.objective_function(model)
+    
+    JuMP.@constraint(model, obj_func >= lowerbound)
+    
+    return
+        
+end
+
+function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64, lowerbound::Union{Float64,Nothing})
         
     x = 0
     
@@ -1036,6 +1045,14 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
             # 0 is placeholder for a better x or just having firststage hold everything
             return xcur, firststage, fs, curit
         end
+    end
+    if typeof(lowerbound) != Nothing
+        
+        fs = add_theta_to_objective!(fs)
+        addtheta = 1
+                
+        #todo create this function
+        add_lower_bound_to_first_stage!(fs, lowerbound)
     end
     
     for i = 1:niter

@@ -1,0 +1,10 @@
+first,second
+fsmodel,wsgep1
+ssmodel,wsgep2
+tol,1.00E-06
+vardict,wsgepv
+nsubs,2
+converged,0
+ssscript,wsgep_models.jl
+dir,./wsgep/
+fsscript,wsgep_models.jl
