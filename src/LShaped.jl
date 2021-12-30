@@ -69,13 +69,19 @@ function L_Shaped_Algorithm_new(subproblem_generator::Function,
                             store::Union{String,Nothing} = nothing,
                             verbose::Int64 = 0,
                             resume::Int64 = 0,
-                            lowerbound::Union{Float64,Nothing} = nothing)
+                            lowerbound::Union{Float64,Nothing} = nothing,
+                            multicut::Int64 = 0)
         
     firststage = make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store, verbose);
     
     fs = master_generator()
     
-    ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
+    if multicut == 0
+        ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
+    else
+        ittime = @elapsed x, firststage, fs, niter = iterate_L_multicut(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
+    end
+    
     
     return x, firststage, fs, ittime, niter
     
