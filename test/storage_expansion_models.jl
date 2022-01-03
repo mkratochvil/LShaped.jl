@@ -1,10 +1,15 @@
-include("../../../FinalProject/parameters.jl")
-include("../../../FinalProject/get_functions.jl")
+using JuMP
+using Gurobi
+using CSV
+using DataFrames
+
+include("../../FinalProject/parameters.jl")
+include("../../FinalProject/get_functions.jl")
 #include("../../../FinalProject/modification_functions.jl")
 
 function first_func()
     
-    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/first_stage/first_stage_model.mps")
+    model = JuMP.read_from_file("../FinalProject/storage_expansion_revised/first_stage/first_stage_model.mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
     set_optimizer_attribute(model, "OutputFlag", 0) 
     JuMP.set_optimizer_attribute(model, "Method", 1)  
@@ -14,7 +19,7 @@ end
 
 function second_func(scen)
     
-    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_scen_$(scen).mps")
+    model = JuMP.read_from_file("../FinalProject/storage_expansion_revised/second_stage/noint_scen_$(scen).mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
     set_optimizer_attribute(model, "OutputFlag", 0) 
     JuMP.set_optimizer_attribute(model, "Method", 1) 
@@ -24,7 +29,7 @@ end
 
  sedict = Dict{Int64,Array{Any}}()
 
-modelvars = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_scen_1.mps")
+modelvars = JuMP.read_from_file("../FinalProject/storage_expansion_revised/second_stage/noint_scen_1.mps")
 
 firstvars = []
 for bus in buses

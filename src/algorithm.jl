@@ -271,7 +271,6 @@ function compute_PI(firststage::FirstStageInfo, contoidx::Dict{Any,Int64})
                end
             end
         end
-        println(count)
     end
     return PI
 end
@@ -286,6 +285,18 @@ function add_theta_to_objective!(fs::JuMP.Model)
     return fs
     
 end
+
+function add_theta_to_objective!(fs::JuMP.Model, nscen::Int64)
+        
+    for sid = 1:nscen
+        var = @variable(fs, base_name = "theta_$(sid)")
+        obj_old = objective_function(fs)
+        @objective(fs, Min, obj_old + var)
+    end
+    
+    return fs
+    
+end
     
 
 function add_constraint_to_objective!(fs::JuMP.Model, E::Array{Float64}, e_k::Float64, v_dict::Dict{Int64,Array{Any}})
@@ -294,6 +305,17 @@ function add_constraint_to_objective!(fs::JuMP.Model, E::Array{Float64}, e_k::Fl
     
     @constraint(fs, sum(E[i]*variable_by_name(fs, v_dict[1][i][1]) for i = 1:nvar) 
                         + variable_by_name(fs, "theta") >= e_k)
+        
+    return fs
+    
+end
+
+function add_constraint_to_objective!(fs::JuMP.Model, E::Array{Float64}, e_k::Float64, v_dict::Dict{Int64,Array{Any}}, sid::Int64)
+        
+    nvar = length(E)
+    
+    @constraint(fs, sum(E[i]*variable_by_name(fs, v_dict[1][i][1]) for i = 1:nvar) 
+                        + variable_by_name(fs, "theta_$(sid)") >= e_k)
         
     return fs
     
@@ -361,6 +383,47 @@ function setup_1st_paths!(firststage::FirstStageInfo)
     return
 end
 
+function setup_1st_paths_multicut!(firststage::FirstStageInfo, nscen::Int64)
+        
+    path = firststage.store
+    vardict = firststage.variables
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vname in keys(vardict)
+        
+        varinfo = vardict[vname]
+        index = varinfo.index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    dfx = DataFrame()
+    dft = DataFrame()
+    
+    for i = 1:nvars
+        insertcols!(dfx, i, Symbol(header[i])=>Float64[])
+    end
+    
+    for i = 1:nscen
+        insertcols!(dft, i, Symbol(i)=>Float64[])
+    end
+    
+    mkdir(path)
+    
+    xcsv = string(path, "x.csv")
+    tcsv = string(path, "theta.csv")
+    
+    CSV.write(xcsv, dfx)
+    CSV.write(tcsv, dft)
+    
+    return
+end
+
 function store_x!(firststage::FirstStageInfo)
     
     path = firststage.store
@@ -378,6 +441,22 @@ function store_x!(firststage::FirstStageInfo)
     
     return
     
+end
+
+function store_thetak!(firststage::FirstStageInfo, thetavec)
+    
+    path = firststage.store
+    tcsv = string(path, "theta.csv")
+        
+    st = string(thetavec)
+    n = length(string(thetavec))
+
+    st = st[5:n-1]
+    open(tcsv, "a") do io
+    write(io, "$(st) \n")
+    end
+    
+    return
 end
 
 function store_E!(firststage::FirstStageInfo, E::Array{Float64})
@@ -480,6 +559,44 @@ function setup_2nd_paths!(path::String, subproblem::Union{Subproblems,Subproblem
     
     CSV.write(Ecsv, df)
     CSV.write(ekcsv, dfe)   
+    
+    return
+end
+
+function setup_2nd_paths!(path::String, subproblem::Union{Subproblems,SubproblemsNew}, multicut)
+    
+    vardict = subproblem.variableinfo
+    sid = subproblem.id
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vid in keys(vardict)
+        
+        vname = vardict[vid].name
+        index = vardict[vid].index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    df = DataFrame()
+    dfe = DataFrame(econst = Float64[])
+    dfc = DataFrame(addcut = Int64[])
+    
+    for i = 1:nvars
+        insertcols!(df, i, Symbol(header[i])=>Float64[])
+    end
+        
+    Ecsv = string(path, "scen_$(sid)/E.csv")
+    ekcsv = string(path, "scen_$(sid)/ek.csv")
+    cutcsv = string(path, "scen_$(sid)/addcut.csv")
+    
+    CSV.write(Ecsv, df)
+    CSV.write(ekcsv, dfe)   
+    CSV.write(cutcsv, dfc)
     
     return
 end
@@ -752,6 +869,18 @@ function store_ek_sub!(subproblem::Union{Subproblems,SubproblemsNew}, path::Stri
     return
     
 end
+
+function store_cut_sub!(addcut::Int64, path::String, sid::Int64)
+    
+    ccsv = string(path, "scen_$(sid)/addcut.csv")
+    
+    open(ccsv, "a") do io
+        write(io, "$(addcut) \n")
+    end
+    
+    return
+    
+end
     
 #as opposed to get_El_from_file to be made
 function get_El_from_sub!(firststage::FirstStageInfo)
@@ -926,6 +1055,58 @@ function resume_fs!(firststage::FirstStageInfo, model::JuMP.Model, tol::Float64)
     load_current_fs!(model, E, ek, xvars, curit)
     
     return curit, converged, collect(x[curit,:])
+end
+
+function resume_fs_multicut!(firststage::FirstStageInfo, v_dict, model::JuMP.Model, nscen::Int64)
+    
+    converged = 0
+    path = firststage.store
+    ##pathE = string(path, "E.csv")
+    ##pathe = string(path, "ek.csv")
+    pathx = string(path, "x.csv")
+    ##pathwt = string(path, "w_theta.csv")
+    
+    ##E = DataFrame(CSV.File(pathE))
+    ##ek = DataFrame(CSV.File(pathe))
+
+    ##w_theta = DataFrame(CSV.File(pathwt))
+    x = DataFrame(CSV.File(pathx))
+    
+    #double check command to exit the program
+    curit= size(x,1)
+
+    #check convergence
+    numcuts = 0
+    
+    add_theta_to_objective!(model, nscen)
+    
+    for sid = 1:nscen
+        pathE = string(path, "scen_$(sid)/E.csv")
+        pathe = string(path, "scen_$(sid)/ek.csv")
+        pathc = string(path, "scen_$(sid)/addcut.csv")
+        
+        E = DataFrame(CSV.File(pathE))
+        ek = DataFrame(CSV.File(pathe))
+        cuts = DataFrame(CSV.File(pathc))
+        
+        #this determines if a cut was generated in the most recent iteration
+        n = size(cuts,1)
+        numcuts += cuts[n,1]
+        
+        for j = 1:n
+            if cuts[j,1] == 1
+                add_constraint_to_objective!(model, collect(E[j,:]), ek[j,1], v_dict, sid)
+            end
+        end        
+    end
+    
+    if numcuts == 0
+        converged = 1
+        return model, curit, converged
+    end
+        
+    
+    return model, curit, converged
 end
 
 function save_cur_duals!(path::String, subproblem::SubproblemsNew, curit::Int64)
@@ -1128,7 +1309,8 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
             println("For subproblem $(sid)..")
             subproblem = firststage.subproblems[sid]
             println("...adjusting h...")
-            adjust_h_new!(subproblem) 
+            #temporarily removing since there should not be interval constraints
+            #adjust_h_new!(subproblem) 
             #see current Ek_ek folder)
             println("...computing Ek...")
             compute_Ek_new!(subproblem) 
@@ -1200,6 +1382,218 @@ function iterate_L_new(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{
         end
 
         fs = add_constraint_to_objective!(fs, El, el, v_dict)
+
+    end
+    
+    println("L-Shaped Algorithm Failed to converge in $(niter) iterations.")
+    
+    return x, firststage, fs, niter
+    
+end
+
+function iterate_L_multicut(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64, lowerbound::Union{Float64,Nothing})
+        
+    x = 0
+    
+    addthetak = zeros(Int64, firststage.subproblems.count)
+    
+    cost = get_cost_vector(firststage, fs)
+    if verbose == 1
+        println("cost = $(cost)")
+    end
+    
+    curit = 0
+    if resume > 0
+        println("!!!!!!!!!!!!!! Resuming from iteration $(resume) using path $(firststage.store) !!!!!!!!!!!!!!")
+        addtheta = 1
+        #rebuild based on values of E and e
+        ### NEEDS TO CHANGE
+        curit, converged, xcur = resume_fs!(firststage, fs, tol)
+        ###
+        
+        if converged > 0
+            println("Model has already converged.")
+            
+            # 0 is placeholder for a better x or just having firststage hold everything
+            return xcur, firststage, fs, curit
+        end
+    end
+    if typeof(lowerbound) != Nothing
+        ### NEEDS TO CHANGE
+        fs = add_theta_to_objective!(fs)
+        addtheta = 1
+        ###
+                
+        #todo create this function
+        ### (potentially) NEEDS TO CHANGE
+        add_lower_bound_to_first_stage!(fs, lowerbound)
+        ###
+    end
+    
+    for i = 1:niter
+        
+        itnum = i+curit
+        itmax = curit+niter
+
+        # step 1 set v = v+1 and solve first stage problem.
+        println("Iteration $(itnum)/$(itmax)")
+
+        optimize!(fs)
+
+        if verbose == 1
+            println("Updating first value...")
+        end
+        update_first_value_L!(firststage, fs)
+        
+        if firststage.store != nothing
+        
+            if itnum == 1
+                if verbose == 1
+                    println("Setting up First Stage paths...")
+                end
+                setup_1st_paths!(firststage)
+            end
+            
+            if verbose == 1
+                println("Storing x...")
+            end
+            store_x!(firststage)
+            
+        end
+
+        # step 3 * update x-variables in second stage
+        if verbose == 1
+            println("Updating second values...")
+        end
+        update_second_value!(firststage)
+
+        #        * solve second stage problems
+        # done separately to eventually parallelize 
+        
+        for sid in keys(firststage.subproblems)  
+            println("Solving subproblems and updating...")
+            solve_sub_and_update!(firststage.subproblems[sid])
+            
+            if firststage.store!= nothing
+                
+                #I will have to store this locally at some point...
+                path = firststage.store
+                
+                if itnum == 1
+                    println("Setting up second stage paths...")
+                    setup_scen_path!(path, sid)
+                    
+                    setup_2nd_paths!(path, firststage.subproblems[sid])
+                end
+                                                   
+            end
+        end
+
+        #        * get simplex multipliers, update E and e
+        # update E
+        println("Updating first stage gradients...")
+        update_first_gradient!(firststage)
+
+        grad = get_grad_vector(firststage)
+        if verbose == 1
+            println("grad = $(grad)")
+        end
+        
+        for sid in keys(firststage.subproblems)  
+            println("For subproblem $(sid)..")
+            subproblem = firststage.subproblems[sid]
+            println("...adjusting h...")
+            #temporarily removing, since there should not be interval constraints
+            #adjust_h_new!(subproblem) 
+            #see current Ek_ek folder)
+            println("...computing Ek...")
+            compute_Ek_new!(subproblem) 
+            println("...computing ek...")
+            compute_ek_new!(subproblem) 
+            
+            if firststage.store != nothing
+                println("Storing Ek and ek...")
+                store_Ek_sub!(subproblem, firststage.store) 
+                store_ek_sub!(subproblem, firststage.store) 
+                
+                println("...saving primal variables...")
+                sid = subproblem.id
+                path_id = string(firststage.store, "scen_$(sid)/")
+                save_cur_vars!(path_id, subproblem.model, itnum)
+                
+                println("...saving dual variables...")
+                save_cur_duals!(path_id, subproblem, itnum)
+            end
+        end
+                    
+        #get it from subproblems. In async make get_Ek_from_file function
+        println("Updating First stage stuff...")
+        #TODO change this to gradient, as two-stage problems have a certain first stage cost ONLY
+        x = get_value_vector(firststage)
+        if verbose == 1
+            println("x = $(x)")
+        end
+        
+        cutcount = 0
+        if addtheta == 0
+            fs = add_theta_to_objective!(fs, firststage.subproblems.count)
+            addtheta = 1
+        end
+        
+        
+        for sid in keys(firststage.subproblems)
+            prob = firststage.subproblems[sid].probability
+            Ek = prob*cost + firststage.subproblems[sid].Ek
+            ek = firststage.subproblems[sid].ek
+            
+            println(sid, " ", Ek, " ", ek)
+            #make this function
+            
+            w = ek - dot(Ek,x)
+            
+            if addthetak[sid] == 1
+                thetak = JuMP.value(JuMP.variable_by_name(fs, "theta_$(sid)"))
+                if thetak < w - tol
+                    cutcount += 1
+                    println(sid, " ", thetak, " ", w)
+                    println("...subproblem $(sid) adding cut...")
+                    fs = add_constraint_to_objective!(fs, Ek, ek, v_dict, sid)
+                end
+            else
+                addthetak[sid] = 1
+                cutcount += 1
+                println("...subproblem $(sid) adding cut...")
+                fs = add_constraint_to_objective!(fs, Ek, ek, v_dict, sid)
+            end
+                    
+        end
+                              
+        ### NEEDS TO CHANGE
+        if firststage.store != nothing
+            store_E!(firststage, El)
+            store_e!(firststage, el)
+            if addtheta == 0
+                store_w_theta!(firststage, w, -Inf)
+            elseif addtheta == 1
+                store_w_theta!(firststage, w, theta)
+            end
+        end
+        ### 
+        
+        if cutcount == 0
+            println("algorithm converged.")
+            println("final x = $(x)")
+            return x, firststage, fs, i
+        end
+        
+        #may need to move for storing stuff
+        #=
+        if addtheta == 0
+            fs = add_theta_to_objective!(fs, firststage.subproblems.count)
+            addtheta = 1
+        end
+        =#
+
 
     end
     
