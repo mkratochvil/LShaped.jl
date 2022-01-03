@@ -14,7 +14,7 @@ end
 
 function second_func(scen)
     
-    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/scen_$(scen).mps")
+    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_scen_$(scen).mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
     set_optimizer_attribute(model, "OutputFlag", 0) 
     JuMP.set_optimizer_attribute(model, "Method", 1) 
@@ -24,7 +24,7 @@ end
 
  sedict = Dict{Int64,Array{Any}}()
 
-modelvars = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/scen_1.mps")
+modelvars = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_scen_1.mps")
 
 firstvars = []
 for bus in buses

@@ -24,10 +24,11 @@ tol = 1e-8
 blxtest = [46.66666666666667, 36.25]
 
 
-#blx, blfstruct, blfsmodel = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]);
+blx, blfstruct, blfsmodel = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]);
 
-#blxm, blfstructm, blfsmodelm = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]; multicut = 1);
+blxm, blfstructm, blfsmodelm = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]; multicut = 1);
 
+#=
 xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-6, 200; multicut=1);
 
 x, probstruct, fsmodel, ittime, niter = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-6, 200);
