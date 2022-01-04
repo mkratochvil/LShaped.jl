@@ -29,7 +29,7 @@ function solve_sub_and_update!(subproblem::Union{Subproblems,SubproblemsNew})
 
     update_constraint_values_nac!(model, varstructs)
     
-    println("...Solving subproblem: $(subproblem.id)...")
+    #println("...Solving subproblem: $(subproblem.id)...")
     optimize!(model)
     update_gradients_nac!(model, varstructs)
     
@@ -1584,6 +1584,269 @@ function iterate_L_multicut(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::
             println("algorithm converged.")
             println("final x = $(x)")
             return x, firststage, fs, i
+        end
+        
+        #may need to move for storing stuff
+        #=
+        if addtheta == 0
+            fs = add_theta_to_objective!(fs, firststage.subproblems.count)
+            addtheta = 1
+        end
+        =#
+
+
+    end
+    
+    println("L-Shaped Algorithm Failed to converge in $(niter) iterations.")
+    
+    return x, firststage, fs, niter
+    
+end
+
+function add_regularized_decomp!(firststage, model, linobj, rho)
+    
+    vardict = firststage.variables
+    
+    newfunc = JuMP.GenericQuadExpr{Float64,VariableRef}()
+    
+    for vname in keys(vardict)
+        varinfo = vardict[vname]
+        index = varinfo.index
+        value = varinfo.value
+        
+        var = JuMP.variable_by_name(model, vname)
+               
+        JuMP.add_to_expression!(newfunc, rho/2*(var - value)^2 )
+    end
+    
+    JuMP.@objective(model, Min, linobj + newfunc)
+        
+    return model
+end
+    
+    
+
+function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64, lowerbound::Union{Float64,Nothing}, rho)
+        
+    x = 0
+    
+    addthetak = zeros(Int64, firststage.subproblems.count)
+    
+    cost = get_cost_vector(firststage, fs)
+    if verbose == 1
+        println("cost = $(cost)")
+    end
+    
+    curit = 0
+    if resume > 0
+        println("!!!!!!!!!!!!!! Resuming from iteration $(resume) using path $(firststage.store) !!!!!!!!!!!!!!")
+        addtheta = 1
+        #rebuild based on values of E and e
+        ### NEEDS TO CHANGE
+        curit, converged, xcur = resume_fs!(firststage, fs, tol)
+        ###
+        
+        if converged > 0
+            println("Model has already converged.")
+            
+            # 0 is placeholder for a better x or just having firststage hold everything
+            return xcur, firststage, fs, curit
+        end
+    end
+    if typeof(lowerbound) != Nothing
+        ### NEEDS TO CHANGE
+        fs = add_theta_to_objective!(fs)
+        addtheta = 1
+        ###
+                
+        #todo create this function
+        ### (potentially) NEEDS TO CHANGE
+        add_lower_bound_to_first_stage!(fs, lowerbound)
+        ###
+    end
+    
+    linobj = GenericAffExpr{Float64,VariableRef}()
+    ssobja = 0.0;
+    
+    for i = 1:niter
+        
+        itnum = i+curit
+        itmax = curit+niter
+
+        # step 1 set v = v+1 and solve first stage problem.
+        #println("Iteration $(itnum)/$(itmax)")
+
+        optimize!(fs)
+        
+        avec = get_value_vector(firststage)
+        
+        fsobj = JuMP.objective_value(fs)
+
+        if verbose == 1
+            println("Updating first value...")
+        end
+        update_first_value_L!(firststage, fs)
+        
+        if firststage.store != nothing
+        
+            if itnum == 1
+                if verbose == 1
+                    println("Setting up First Stage paths...")
+                end
+                setup_1st_paths!(firststage)
+            end
+            
+            if verbose == 1
+                println("Storing x...")
+            end
+            store_x!(firststage)
+            
+        end
+
+        # step 3 * update x-variables in second stage
+        if verbose == 1
+            println("Updating second values...")
+        end
+        update_second_value!(firststage)
+
+        #        * solve second stage problems
+        # done separately to eventually parallelize 
+        
+        ssobjx = 0.0
+        for sid in keys(firststage.subproblems)  
+            #println("Solving subproblems and updating...")
+            solve_sub_and_update!(firststage.subproblems[sid])
+            
+            ssobjx += firststage.subproblems[sid].probability*firststage.subproblems[sid].objective_value
+            
+            if firststage.store!= nothing
+                
+                #I will have to store this locally at some point...
+                path = firststage.store
+                
+                if itnum == 1
+                    #println("Setting up second stage paths...")
+                    setup_scen_path!(path, sid)
+                    
+                    setup_2nd_paths!(path, firststage.subproblems[sid])
+                end
+                                                   
+            end
+        end
+        
+        println(itnum, " ", fsobj, " ", ssobjx, " ", abs(fsobj-ssobjx))
+        if abs(fsobj - ssobjx) < tol
+            
+            println("algorithm converged.")
+            println("final x = $(avec)")
+            return avec, firststage, fs, i
+        end
+        
+        
+        #        * get simplex multipliers, update E and e
+        # update E
+        #println("Updating first stage gradients...")
+        update_first_gradient!(firststage)
+
+        grad = get_grad_vector(firststage)
+        if verbose == 1
+            println("grad = $(grad)")
+        end
+        
+        for sid in keys(firststage.subproblems)  
+          #  println("For subproblem $(sid)..")
+            subproblem = firststage.subproblems[sid]
+           # println("...adjusting h...")
+            #temporarily removing, since there should not be interval constraints
+            #adjust_h_new!(subproblem) 
+            #see current Ek_ek folder)
+            #println("...computing Ek...")
+            compute_Ek_new!(subproblem) 
+            #println("...computing ek...")
+            compute_ek_new!(subproblem) 
+            
+            if firststage.store != nothing
+                println("Storing Ek and ek...")
+                store_Ek_sub!(subproblem, firststage.store) 
+                store_ek_sub!(subproblem, firststage.store) 
+                
+                println("...saving primal variables...")
+                sid = subproblem.id
+                path_id = string(firststage.store, "scen_$(sid)/")
+                save_cur_vars!(path_id, subproblem.model, itnum)
+                
+                println("...saving dual variables...")
+                save_cur_duals!(path_id, subproblem, itnum)
+            end
+        end
+                    
+        #get it from subproblems. In async make get_Ek_from_file function
+        #println("Updating First stage stuff...")
+        #TODO change this to gradient, as two-stage problems have a certain first stage cost ONLY
+        x = get_value_vector(firststage)
+        if verbose == 1
+            println("x = $(x)")
+        end
+        
+        cutcount = 0
+        if addtheta == 0
+            fs = add_theta_to_objective!(fs, firststage.subproblems.count)
+            linobj = JuMP.objective_function(fs)
+        end
+        
+        if addtheta == 0
+            # x = a here
+            fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            ssobja = ssobjx
+            addtheta = 1
+        end
+        
+        
+        for sid in keys(firststage.subproblems)
+            prob = firststage.subproblems[sid].probability
+            Ek = prob*cost + firststage.subproblems[sid].Ek
+            ek = firststage.subproblems[sid].ek
+            
+            #println(sid, " ", Ek, " ", ek)
+            #make this function
+            
+            w = ek - dot(Ek,x)
+            
+            if addthetak[sid] == 1
+                thetak = JuMP.value(JuMP.variable_by_name(fs, "theta_$(sid)"))
+                if thetak < w - tol
+                    cutcount += 1
+                    #println(sid, " ", thetak, " ", w)
+                    #println("...subproblem $(sid) adding cut...")
+                    fs = add_constraint_to_objective!(fs, Ek, ek, v_dict, sid)
+                end
+            else
+                addthetak[sid] = 1
+                cutcount += 1
+                #println("...subproblem $(sid) adding cut...")
+                fs = add_constraint_to_objective!(fs, Ek, ek, v_dict, sid)
+            end
+                    
+        end
+                              
+        ### NEEDS TO CHANGE
+        if firststage.store != nothing
+            store_E!(firststage, El)
+            store_e!(firststage, el)
+            if addtheta == 0
+                store_w_theta!(firststage, w, -Inf)
+            elseif addtheta == 1
+                store_w_theta!(firststage, w, theta)
+            end
+        end
+        ### 
+        
+        if cutcount == 0
+            fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            ssobja = ssobjx
+        elseif ssobjx <= ssobja
+            fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            ssobja = ssobjx
         end
         
         #may need to move for storing stuff
