@@ -35,10 +35,10 @@ end
 
 function initialize(model::JuMP.Model, vnames::Dict{Int64,Array{Any}})
         
-    println("...making stage_name_idx...")
+    #println("...making stage_name_idx...")
     vardict = stage_name_idx(model, vnames)
     
-    println("...making variable_info...") #TODO fix the bottleneck here. 
+    #println("...making variable_info...") #TODO fix the bottleneck here. 
     varstructs = make_VariableInfo(vardict)
     
     return model, varstructs, vardict[1]
@@ -230,13 +230,13 @@ function make_two_stage_setup_L_new(subproblem_generator::Function, v_dict::Dict
         
         idxtocon = IdxToCon(model)
     
-        println("computing h for subproblem $(i)...")
+        #println("computing h for subproblem $(i)...")
         h = compute_h_new(model, idxtocon)
     
-        println("Initializing subproblem $(i)...")
+        #println("Initializing subproblem $(i)...")
         model, varstructs, vnametoidx = initialize(model, v_dict)
 
-        println("Creating subprob[$(i)] struct...")
+        #println("Creating subprob[$(i)] struct...")
         subprob[i] = SubproblemsNew(i, model, probs[i], varstructs, idxtocon, h, nothing, nothing, vnametoidx, nothing)
 
     end

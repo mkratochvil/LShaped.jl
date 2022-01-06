@@ -39,8 +39,8 @@ function bl1()
     @variable(fs, x1 >= 40)
     @variable(fs, x2 >= 20)
     
-    #@objective(fs, Min, 100*x1 + 150*x2)
-    @objective(fs, Min, 0.0)
+    @objective(fs, Min, 100*x1 + 150*x2)
+    #@objective(fs, Min, 0.0)
     
     @constraint(fs, x1 + x2 <= 120)
     

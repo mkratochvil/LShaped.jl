@@ -1,10 +1,10 @@
 first,second
 fsmodel,first_func
 ssmodel,second_func
-tol,1.00E-06
+tol,1.00E-05
 vardict,sedict
 nsubs,12
-converged,1
+converged,0
 ssscript,models.jl
 dir,./storage_expansion/
 fsscript,models.jl

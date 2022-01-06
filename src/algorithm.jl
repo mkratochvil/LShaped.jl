@@ -424,6 +424,54 @@ function setup_1st_paths_multicut!(firststage::FirstStageInfo, nscen::Int64)
     return
 end
 
+function setup_1st_paths_regdec!(firststage::FirstStageInfo, nscen::Int64)
+        
+    path = firststage.store
+    vardict = firststage.variables
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vname in keys(vardict)
+        
+        varinfo = vardict[vname]
+        index = varinfo.index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    dfx = DataFrame()
+    dft = DataFrame()
+    dfa = DataFrame()
+    dfo = DataFrame(objval = Float64[])
+    
+    for i = 1:nvars
+        insertcols!(dfx, i, Symbol(header[i])=>Float64[])
+        insertcols!(dfa, i, Symbol(header[i])=>Float64[])
+    end
+    
+    for i = 1:nscen
+        insertcols!(dft, i, Symbol(i)=>Float64[])
+    end
+    
+    mkdir(path)
+    
+    xcsv = string(path, "x.csv")
+    tcsv = string(path, "theta.csv")
+    acsv = string(path, "a.csv")
+    ocsv = string(path, "ssobja.csv")
+    
+    CSV.write(xcsv, dfx)
+    CSV.write(tcsv, dft)
+    CSV.write(acsv, dfa)
+    CSV.write(ocsv, dfo)
+    
+    return
+end
+
 function store_x!(firststage::FirstStageInfo)
     
     path = firststage.store
@@ -442,6 +490,36 @@ function store_x!(firststage::FirstStageInfo)
     return
     
 end
+
+function store_a!(a, path::String)
+    
+    acsv = string(path, "a.csv")
+    
+    
+    sa = string(a)
+    n = length(string(a))
+
+    sa = sa[2:n-1]
+    open(acsv, "a") do io
+        write(io, "$(sa) \n")
+    end
+    
+    return
+    
+end
+
+function store_ssobja!(ssobja, path::String)
+    
+    ocsv = string(path, "ssobja.csv")
+    
+    open(ocsv, "a") do io
+        write(io, "$(ssobja) \n")
+    end
+    
+    return
+end
+
+
 
 function store_thetak!(firststage::FirstStageInfo, thetavec)
     
@@ -597,6 +675,47 @@ function setup_2nd_paths!(path::String, subproblem::Union{Subproblems,Subproblem
     CSV.write(Ecsv, df)
     CSV.write(ekcsv, dfe)   
     CSV.write(cutcsv, dfc)
+    
+    return
+end
+
+function setup_2nd_paths_regdec!(path::String, subproblem::Union{Subproblems,SubproblemsNew})
+    
+    vardict = subproblem.variableinfo
+    sid = subproblem.id
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vid in keys(vardict)
+        
+        vname = vardict[vid].name
+        index = vardict[vid].index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    df = DataFrame()
+    dfe = DataFrame(econst = Float64[])
+    dfc = DataFrame(addcut = Int64[])
+    dfo = DataFrame(objval = Float64[])
+    
+    for i = 1:nvars
+        insertcols!(df, i, Symbol(header[i])=>Float64[])
+    end
+        
+    Ecsv = string(path, "scen_$(sid)/E.csv")
+    ekcsv = string(path, "scen_$(sid)/ek.csv")
+    cutcsv = string(path, "scen_$(sid)/addcut.csv")
+    objcsv = string(path, "scen_$(sid)/ssobjx.csv")
+    
+    CSV.write(Ecsv, df)
+    CSV.write(ekcsv, dfe)   
+    CSV.write(cutcsv, dfc)
+    CSV.write(objcsv, dfo)
     
     return
 end
@@ -881,6 +1000,18 @@ function store_cut_sub!(addcut::Int64, path::String, sid::Int64)
     return
     
 end
+
+function store_objval!(objval::Float64, path::String, sid::Int64)
+    
+    ocsv = string(path, "scen_$(sid)/ssobjx.csv")
+    
+    open(ocsv, "a") do io
+        write(io, "$(objval) \n")
+    end
+    
+    return
+    
+end
     
 #as opposed to get_El_from_file to be made
 function get_El_from_sub!(firststage::FirstStageInfo)
@@ -1107,6 +1238,113 @@ function resume_fs_multicut!(firststage::FirstStageInfo, v_dict, model::JuMP.Mod
         
     
     return model, curit, converged
+end
+
+function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model, nscen::Int64, rho::Float64, header)
+    
+    converged = 0
+    path = firststage.store
+    pathx = string(path, "x.csv")
+    patha = string(path, "a.csv")
+    ssobjacsv = string(path, "ssobja.csv")
+
+    ##w_theta = DataFrame(CSV.File(pathwt))
+    xdf = DataFrame(CSV.File(pathx))
+    adf = DataFrame(CSV.File(patha))
+    
+    na = size(adf,1)
+    nx = size(xdf,1)
+    
+    curit= size(xdf,1)
+    ssobjadf = DataFrame()
+    ssobja = 0.0
+    if curit > 1
+        ssobjadf = DataFrame(CSV.File(ssobjacsv))
+        ssobja = ssobjadf[size(ssobjadf,1),1]
+    end
+    
+    a = collect(adf[na,:])
+    x = collect(xdf[nx,:])
+    
+    #check convergence
+    numcuts = 0
+    
+    add_theta_to_objective!(model, nscen)
+    
+    ssobjx = 0.0
+    
+    
+    for sid = 1:nscen
+        pathE = string(path, "scen_$(sid)/E.csv")
+        pathe = string(path, "scen_$(sid)/ek.csv")
+        pathc = string(path, "scen_$(sid)/addcut.csv")
+        pathsobj = string(path, "scen_$(sid)/ssobjx.csv")
+        
+        E = DataFrame(CSV.File(pathE))
+        ek = DataFrame(CSV.File(pathe))
+        cuts = DataFrame(CSV.File(pathc))
+        ssobjxdf = DataFrame(CSV.File(pathsobj))
+        
+        ssobjx += ssobjxdf[size(ssobjxdf,1),1]
+        
+        #this determines if a cut was generated in the most recent iteration
+        n = size(cuts,1)
+        numcuts += cuts[n,1]
+        
+        for j = 1:n
+            if cuts[j,1] == 1
+                add_constraint_to_objective!(model, collect(E[j,:]), ek[j,1], v_dict, sid)
+            end
+        end        
+    end
+    
+    #initial ssobja = ssobjx since an initial a comes from first (linear) solve
+    if curit == 1
+        ssobja = ssobjx
+        LShaped.store_ssobja!(ssobja, path)
+    end
+    println(curit, " ", ssobja, " ", ssobjx, " ", numcuts)
+    if numcuts == 0
+        a = x #from last iter
+        ssobja = ssobjx
+        store_a!(a, path)
+        store_ssobja!(ssobja, path)
+    else
+        if ssobjx <= ssobja
+            a = x
+            ssobja = ssobjx
+            store_a!(a, path)
+            store_ssobja!(ssobja, path)
+        else
+            store_a!(a, path)
+            store_ssobja!(ssobja, path)
+        end
+    end
+
+    ## load in model, x or a vector, and header to adjust the model
+    model = add_regularized_decomp_async!(model, a, header, rho)
+    
+    return model, curit, ssobja
+end
+
+function add_regularized_decomp_async!(model, a, varnames, rho)
+    
+    n = length(a)
+    
+    linobj = JuMP.objective_function(model)
+    
+    newfunc = JuMP.GenericQuadExpr{Float64,VariableRef}()
+    
+    for i = 1:n
+        
+        var = JuMP.variable_by_name(model, varnames[i])
+               
+        JuMP.add_to_expression!(newfunc, rho/2*(var - a[i])^2 )
+    end
+    
+    JuMP.@objective(model, Min, linobj + newfunc)
+        
+    return model
 end
 
 function save_cur_duals!(path::String, subproblem::SubproblemsNew, curit::Int64)
@@ -1675,12 +1913,12 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
 
         # step 1 set v = v+1 and solve first stage problem.
         #println("Iteration $(itnum)/$(itmax)")
-
+        
         optimize!(fs)
         
         avec = get_value_vector(firststage)
         
-        fsobj = JuMP.objective_value(fs)
+        fsobj = JuMP.objective_value(fs)        
 
         if verbose == 1
             println("Updating first value...")
@@ -1701,6 +1939,16 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
             end
             store_x!(firststage)
             
+        end
+        
+        if itnum > 1
+            println(itnum, " ", fsobj, " ", ssobja, " ", fsobj-ssobja)
+            if abs(fsobj - ssobja) < tol
+
+                println("algorithm converged.")
+                println("final x = $(avec)")
+                return avec, firststage, fs, i
+            end
         end
 
         # step 3 * update x-variables in second stage
@@ -1733,13 +1981,14 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
                                                    
             end
         end
-        
-        println(itnum, " ", fsobj, " ", ssobjx, " ", abs(fsobj-ssobjx))
-        if abs(fsobj - ssobjx) < tol
-            
-            println("algorithm converged.")
-            println("final x = $(avec)")
-            return avec, firststage, fs, i
+        if itnum == 1
+            println(itnum, " ", fsobj, " ", ssobjx, " ", fsobj-ssobjx)
+            if abs(fsobj - ssobjx) < tol
+
+                println("algorithm converged.")
+                println("final x = $(avec)")
+                return avec, firststage, fs, i
+            end
         end
         
         
@@ -1841,6 +2090,7 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
         end
         ### 
         
+        println(itnum, " ", ssobja, " ", ssobjx, " ", cutcount)
         if cutcount == 0
             fs = add_regularized_decomp!(firststage, fs, linobj, rho)
             ssobja = ssobjx
