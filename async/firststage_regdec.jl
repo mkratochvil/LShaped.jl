@@ -5,7 +5,14 @@ infoloc = "./info.csv"
 info = CSV.File(infoloc) |> Dict
 
 #add into info
-rho = 0.01
+rho = 1.0
+tau = 1e-7
+rhomax = 1.0e3#12.8
+rhomin = 1.0e-3#.00078125
+gamma = 0.01
+#avec = [0.01515317295046937, 0.07576586475234684, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06992444968258622, 0.3496222484129311, 0.024425242996275243, 0.10597209391518082, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09035704399269796, 0.4517852199634898, 0.0, 0.0, 0.0, 0.0, 0.01246785328231903, 0.06233926641159515, 0.0053185494034406755, 0.026592747017203378, 0.0, 0.0, 0.08532203616288067, 0.4266101808144034, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2892514173319449, 1.4462570866597244, 0.0, 0.0]
+#ssobja = 1507.3174544213448
+ 
 
 converged = parse(Int64,info["converged"])
 
@@ -53,6 +60,7 @@ if converged == 0 || ispath(dataloc) == 0
         
         
         x = LShaped.get_x_from_file(dataloc)
+        rho = LShaped.get_rho_from_file(dataloc)
         
         ##theta = LShaped.get_theta_from_file(dataloc)
         
@@ -76,7 +84,7 @@ if converged == 0 || ispath(dataloc) == 0
         end
 
         ##curit, converged, xcur = LShaped.resume_fs!(firststage, model, tol)
-        model, curit, ssobja = LShaped.resume_fs_regdec!(firststage, vardict, model, nsubs, rho, header)
+        model, curit, ssobja, rho = LShaped.resume_fs_regdec!(firststage, vardict, model, nsubs, rho, header, rhomin, rhomax, gamma)
         # + load in each model using iterations that require cuts
         # + track the last iteration, and whether a cut was made, if sum of cuts made is 0, set converged = 1
         # + return current iterations "curit" (files are required to match) and "converged"
@@ -88,8 +96,25 @@ if converged == 0 || ispath(dataloc) == 0
         end
         ##LShaped.setup_1st_paths!(firststage)
         LShaped.setup_1st_paths_regdec!(firststage, nsubs)
-        # - Create x vars
-        # - Create theta vars
+        
+        #=
+        ## create regularized problem with initial rho and avec
+        vdicth = firststage.variables
+        nvars = vdicth.count
+
+        header = Array{Union{Nothing, String}}(nothing, nvars)
+
+        for vname in keys(vdicth)
+
+            varinfo = vdicth[vname]
+            index = varinfo.index
+
+            header[index] = vname
+
+        end
+        LShaped.add_regularized_decomp_async!(model, avec, header, rho)
+        =#
+        
     end
     #println("converged = $(converged)")
     
@@ -99,23 +124,27 @@ if converged == 0 || ispath(dataloc) == 0
         #println("curit = $(curit)")
 
         JuMP.optimize!(model)
+        fsobj = JuMP.objective_value(model)
+        ### add this
+        LShaped.store_fsobj!(fsobj, dataloc)
+        LShaped.store_rho!(rho, dataloc)
 
         LShaped.update_first_value_L!(firststage, model)
 
         LShaped.store_x!(firststage)
         
         thetavec = [];
-        avec = LShaped.get_value_vector(firststage)
+        ## replaced avec here for when an initial avec not decided
         if curit > 1
-            
+            ## replaced avec here for when an initial avec not decided
+            avec = LShaped.get_value_vector(firststage)
             for i = 1:nsubs
                 push!(thetavec, JuMP.value(JuMP.variable_by_name(model, "theta_$(i)")))
                 ##thetavalue = JuMP.value(JuMP.variable_by_name(model, "theta"))
             end
             #check for convergence
-            fsobj = JuMP.objective_value(model)
-            println(curit, " ", fsobj, " ", ssobja, " ", abs(fsobj-ssobja))
-            if abs(fsobj - ssobja) < tol
+            println(curit, " ", fsobj, " ", ssobja, " ", abs(fsobj-ssobja)/(tau + abs(ssobja)))
+            if abs(fsobj - ssobja) < tol*(tau + abs(ssobja))
 
                 println("algorithm converged.")
                 println("final x = $(avec)")
@@ -128,7 +157,8 @@ if converged == 0 || ispath(dataloc) == 0
             for i = 1:nsubs
                 push!(thetavec, -Inf)
             end
-            LShaped.store_a!(avec, dataloc)
+            #LShaped.store_a!(avec, dataloc)
+            #LShaped.store_ssobja!(ssobja, dataloc)
             
             #ssobja = JuMP.objective_value(model)
             #LShaped.store_ssobja!(ssobja, dataloc)

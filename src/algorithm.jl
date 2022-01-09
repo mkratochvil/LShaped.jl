@@ -447,6 +447,8 @@ function setup_1st_paths_regdec!(firststage::FirstStageInfo, nscen::Int64)
     dft = DataFrame()
     dfa = DataFrame()
     dfo = DataFrame(objval = Float64[])
+    dffs = DataFrame(fsobj = Float64[])
+    dfr = DataFrame(rho = Float64[])
     
     for i = 1:nvars
         insertcols!(dfx, i, Symbol(header[i])=>Float64[])
@@ -463,11 +465,15 @@ function setup_1st_paths_regdec!(firststage::FirstStageInfo, nscen::Int64)
     tcsv = string(path, "theta.csv")
     acsv = string(path, "a.csv")
     ocsv = string(path, "ssobja.csv")
+    fscsv = string(path, "fsobj.csv")
+    rcsv = string(path, "rho.csv")
     
     CSV.write(xcsv, dfx)
     CSV.write(tcsv, dft)
     CSV.write(acsv, dfa)
     CSV.write(ocsv, dfo)
+    CSV.write(fscsv, dffs)
+    CSV.write(rcsv, dfr)
     
     return
 end
@@ -508,6 +514,7 @@ function store_a!(a, path::String)
     
 end
 
+
 function store_ssobja!(ssobja, path::String)
     
     ocsv = string(path, "ssobja.csv")
@@ -519,7 +526,27 @@ function store_ssobja!(ssobja, path::String)
     return
 end
 
+function store_fsobj!(fsobj, path::String)
+    
+    ocsv = string(path, "fsobj.csv")
+    
+    open(ocsv, "a") do io
+        write(io, "$(fsobj) \n")
+    end
+    
+    return
+end
 
+function store_rho!(rho, path::String)
+    
+    rcsv = string(path, "rho.csv")
+    
+    open(rcsv, "a") do io
+        write(io, "$(rho) \n")
+    end
+    
+    return
+end
 
 function store_thetak!(firststage::FirstStageInfo, thetavec)
     
@@ -1136,6 +1163,17 @@ function get_x_from_file(path::String)
     
 end
 
+function get_rho_from_file(path::String)
+    
+    rpath = string(path, "rho.csv")
+    
+    rdf = DataFrame(CSV.File(rpath))
+    
+    rho = rdf[size(rdf,1),1]
+    
+    return rho
+end
+
 function get_theta_from_file(path::String)
     
     tpath = string(path, "theta.csv")
@@ -1240,20 +1278,25 @@ function resume_fs_multicut!(firststage::FirstStageInfo, v_dict, model::JuMP.Mod
     return model, curit, converged
 end
 
-function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model, nscen::Int64, rho::Float64, header)
+function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model, nscen::Int64, rho::Float64, header, rhomin, rhomax, gamma)
     
     converged = 0
     path = firststage.store
     pathx = string(path, "x.csv")
     patha = string(path, "a.csv")
     ssobjacsv = string(path, "ssobja.csv")
+    fsobjcsv = string(path, "fsobj.csv")
+    rhocsv = string(path, "rho.csv")
 
-    ##w_theta = DataFrame(CSV.File(pathwt))
     xdf = DataFrame(CSV.File(pathx))
     adf = DataFrame(CSV.File(patha))
+    fsobjdf = DataFrame(CSV.File(fsobjcsv))
+    rhodf = DataFrame(CSV.File(rhocsv))
     
     na = size(adf,1)
     nx = size(xdf,1)
+    nfs = size(fsobjdf,1)
+    nrho = size(rhodf,1)
     
     curit= size(xdf,1)
     ssobjadf = DataFrame()
@@ -1261,10 +1304,11 @@ function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model
     if curit > 1
         ssobjadf = DataFrame(CSV.File(ssobjacsv))
         ssobja = ssobjadf[size(ssobjadf,1),1]
+        x = collect(xdf[nx,:])
     end
     
-    a = collect(adf[na,:])
     x = collect(xdf[nx,:])
+    fsobj = fsobjdf[nfs,1]
     
     #check convergence
     numcuts = 0
@@ -1303,7 +1347,8 @@ function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model
         ssobja = ssobjx
         LShaped.store_ssobja!(ssobja, path)
     end
-    println(curit, " ", ssobja, " ", ssobjx, " ", numcuts)
+    
+    print(curit, " ", ssobja, " ", ssobjx, " ", numcuts, " ")
     if numcuts == 0
         a = x #from last iter
         ssobja = ssobjx
@@ -1320,11 +1365,27 @@ function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model
             store_ssobja!(ssobja, path)
         end
     end
+    
+    ##### put alg stuff here #####
+    if ssobja <= ssobjx - gamma*(ssobjx - fsobj)
+        rho = max(rhomin, 0.5*rho)
+        #if rho == rhomin
+        #    rho = 0.0
+        #end
+    else
+        #if rho > 0.0
+            rho = min(rhomax, 2.0*rho)
+        #else
+        #    rho = rhomin
+        #end
+    end
+    
+    println(rho)
 
     ## load in model, x or a vector, and header to adjust the model
     model = add_regularized_decomp_async!(model, a, header, rho)
     
-    return model, curit, ssobja
+    return model, curit, ssobja, rho
 end
 
 function add_regularized_decomp_async!(model, a, varnames, rho)
@@ -1864,8 +1925,20 @@ end
     
     
 
-function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64, lowerbound::Union{Float64,Nothing}, rho)
+function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64, lowerbound::Union{Float64,Nothing}, rho, rhomin, rhomax, gamma)
+    
+    println(rho)
+    println(rhomin)
+    println(rhomax)
+    println(gamma)
+    
+    if rho > rhomax
+        rho = rhomax
+    elseif rho < rhomin
+        rho = rhomin
+    end
         
+    tau = 1e-8
     x = 0
     
     addthetak = zeros(Int64, firststage.subproblems.count)
@@ -1908,6 +1981,7 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
     
     for i = 1:niter
         
+        println("rho = ", rho)
         itnum = i+curit
         itmax = curit+niter
 
@@ -1942,8 +2016,8 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
         end
         
         if itnum > 1
-            println(itnum, " ", fsobj, " ", ssobja, " ", fsobj-ssobja)
-            if abs(fsobj - ssobja) < tol
+            println(itnum, " ", fsobj, " ", ssobja, " ", abs(fsobj-ssobja)/(tau + abs(ssobja)))
+            if abs(fsobj - ssobja) < tol*(tau + abs(ssobja))
 
                 println("algorithm converged.")
                 println("final x = $(avec)")
@@ -1982,8 +2056,8 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
             end
         end
         if itnum == 1
-            println(itnum, " ", fsobj, " ", ssobjx, " ", fsobj-ssobjx)
-            if abs(fsobj - ssobjx) < tol
+            println(itnum, " ", fsobj, " ", ssobjx, " ", tol*(tau + abs(ssobjx))-abs(fsobj-ssobjx))
+            if abs(fsobj - ssobjx) < tol*(tau + abs(ssobjx))
 
                 println("algorithm converged.")
                 println("final x = $(avec)")
@@ -2090,23 +2164,32 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
         end
         ### 
         
+        ##### THIS WHOLE BLOCK SHOULD BE ADJUSTED ACCORDING TO WHETHER ADAPTIVE RHO IS BEING USED #####
         println(itnum, " ", ssobja, " ", ssobjx, " ", cutcount)
+        changea = 0
         if cutcount == 0
-            fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            #fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            changea = 1
             ssobja = ssobjx
         elseif ssobjx <= ssobja
-            fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            #fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+            changea = 1
             ssobja = ssobjx
         end
-        
-        #may need to move for storing stuff
-        #=
-        if addtheta == 0
-            fs = add_theta_to_objective!(fs, firststage.subproblems.count)
-            addtheta = 1
-        end
-        =#
 
+        if ssobja <= ssobjx - gamma*(ssobjx - fsobj)
+            rho = max(rhomin, 0.5*rho)
+        else
+            rho = min(rhomax, 2.0*rho)
+        end
+        
+        ### this is WRONG in the case where a is not changed but rho is. Perhaps add function to make it right (async's?)
+        if changea == 1
+            fs = add_regularized_decomp!(firststage, fs, linobj, rho)
+        else
+            fs = change_rho_only!(fs, linobj, rho)
+        end
+        #####
 
     end
     
@@ -2114,4 +2197,23 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
     
     return x, firststage, fs, niter
     
+end
+
+function change_rho_only!(firststage, model, avec, rho)
+    
+    newfunc = JuMP.GenericQuadExpr{Float64,VariableRef}()
+    
+    for vname in keys(vardict)
+        varinfo = vardict[vname]
+        index = varinfo.index
+        value = avec[index]
+        
+        var = JuMP.variable_by_name(model, vname)
+               
+        JuMP.add_to_expression!(newfunc, rho/2*(var - value)^2 )
+    end
+    
+    JuMP.@objective(model, Min, linobj + newfunc)
+        
+    return model
 end

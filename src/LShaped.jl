@@ -71,7 +71,10 @@ function L_Shaped_Algorithm_new(subproblem_generator::Function,
                             resume::Int64 = 0,
                             lowerbound::Union{Float64,Nothing} = nothing,
                             multicut::Int64 = 0,
-                            rho::Float64 = 1.0)
+                            rho::Float64 = 1.0,
+                            rhomin::Float64 = 1.0,
+                            rhomax::Float64 = 1.0,
+                            gamma::Float64 = 0.01)
         
     firststage = make_two_stage_setup_L_new(subproblem_generator, v_dict, N, probs, store, verbose);
     
@@ -80,7 +83,7 @@ function L_Shaped_Algorithm_new(subproblem_generator::Function,
     if multicut == 1
         ittime = @elapsed x, firststage, fs, niter = iterate_L_multicut(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
     elseif multicut == 2
-        ittime = @elapsed x, firststage, fs, niter = iterate_L_regularized_decomp(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound, rho)
+        ittime = @elapsed x, firststage, fs, niter = iterate_L_regularized_decomp(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound, rho, rhomin, rhomax, gamma)
     else 
         ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
     end

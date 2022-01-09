@@ -1,7 +1,7 @@
 first,second
 fsmodel,first_func
 ssmodel,second_func
-tol,1.00E-05
+tol,1.00E-10
 vardict,sedict
 nsubs,12
 converged,0

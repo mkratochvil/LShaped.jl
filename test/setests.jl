@@ -30,6 +30,8 @@ blxtest = [46.66666666666667, 36.25]
 
 #blxm, blfstructm, blfsmodelm = LShaped.L_Shaped_Algorithm_new(bl2, blv, 2, bl1, 1e-6, 10, [0.4, 0.6]; multicut = 2, rho=1.0);
 
-xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-5, 1000; multicut=2, rho = .01);
+xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-10, 1000; multicut=2, rho = .01, rhomin = .00078125, rhomax = 12.8, gamma = 0.01);
+
+println("please stop showing")
 
 #x, probstruct, fsmodel, ittime, niter = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-6, 200);
