@@ -1304,7 +1304,7 @@ function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model
     if curit > 1
         ssobjadf = DataFrame(CSV.File(ssobjacsv))
         ssobja = ssobjadf[size(ssobjadf,1),1]
-        x = collect(xdf[nx,:])
+        a = collect(adf[na,:])
     end
     
     x = collect(xdf[nx,:])
