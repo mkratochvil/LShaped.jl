@@ -18,18 +18,18 @@ function bl2(sid)
     
     @variable(model, x1 )# >= 40.0)
     @variable(model, x2 )# >= 20.0)
-    @variable(model, y1[sid] >= 0)
-    @variable(model, y2[sid] >= 0)
+    @variable(model, y1 >= 0)
+    @variable(model, y2 >= 0)
     
-    @objective(model, Min, 100*x1 + 150*x2 + q1[sid]*y1[sid] + q2[sid]*y2[sid])
+    @objective(model, Min, 100*x1 + 150*x2 + q1[sid]*y1 + q2[sid]*y2)
     
    # @constraint(model, x1 + x2 <= 120)
     
-    @constraint(model, 6*y1[sid] + 10*y2[sid] <= 60*x1)
-    @constraint(model, 8*y1[sid] + 5*y2[sid] <= 80*x2)
+    @constraint(model, 6*y1 + 10*y2 <= 60*x1)
+    @constraint(model, 8*y1 + 5*y2 <= 80*x2)
     
-    @constraint(model, y1[sid] <= d1[sid])
-    @constraint(model, y2[sid] <= d2[sid])
+    @constraint(model, y1 <= d1[sid])
+    @constraint(model, y2 <= d2[sid])
     
     return model
     

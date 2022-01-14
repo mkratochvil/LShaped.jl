@@ -2217,3 +2217,306 @@ function change_rho_only!(firststage, model, avec, rho)
         
     return model
 end
+
+function iterate_CaCG(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{Int64,Array{Any}}, addtheta::Int64, tol::Float64, niter::Int64, verbose::Int64, resume::Int64)
+        
+    x = 0
+    UB = Inf
+    LB = -Inf
+    itnum = 0
+    
+    cost = get_cost_vector(firststage, fs)
+    if verbose == 1
+        println("cost = $(cost)")
+    end
+    
+    curit = 0
+    if resume > 0
+        println("!!!!!!!!!!!!!! Resuming from iteration $(resume) using path $(firststage.store) !!!!!!!!!!!!!!")
+        addtheta = 1
+        #rebuild based on values of E and e
+        curit, converged, xcur = resume_fs!(firststage, fs, tol)
+        
+        if converged > 0
+            println("Model has already converged.")
+            
+            # 0 is placeholder for a better x or just having firststage hold everything
+            return xcur, firststage, fs, curit
+        end
+    end
+    
+    wcscens = [];
+    for i = 1:niter       
+        
+        itnum = i+curit
+        itmax = curit+niter
+        
+        if abs(UB - LB)/UB < tol
+            println(abs(UB - LB)/UB)
+            x = get_value_vector(firststage)
+            println("algorithm converged.")
+            println("final x = $(x)")
+            return x, firststage, fs, itnum-1, wcscens
+        end
+
+        # step 1 set v = v+1 and solve first stage problem.
+        println("Iteration $(itnum)/$(itmax)")
+
+        optimize!(fs)
+        
+        if itnum > 1
+            LB = JuMP.objective_value(fs)
+        end
+        println("New LB is $(LB)")
+
+        if verbose == 1
+            println("Updating first value...")
+        end
+        update_first_value_L!(firststage, fs)
+        
+        if firststage.store != nothing
+        
+            if itnum == 1
+                if verbose == 1
+                    println("Setting up First Stage paths...")
+                end
+                setup_1st_paths!(firststage)
+            end
+            
+            if verbose == 1
+                println("Storing x...")
+            end
+            store_x!(firststage)
+            
+        end
+
+        # step 3 * update x-variables in second stage
+        if verbose == 1
+            println("Updating second values...")
+        end
+        update_second_value!(firststage)
+
+        #        * solve second stage problems
+        # done separately to eventually parallelize 
+        wcval = -Inf
+        wcscen = 0
+        for sid in keys(firststage.subproblems)  
+            #println("Solving subproblems and updating...")
+            solve_sub_and_update!(firststage.subproblems[sid])
+            if JuMP.objective_value(firststage.subproblems[sid].model) > wcval
+                wcval = JuMP.objective_value(firststage.subproblems[sid].model)
+                wcscen = sid
+            end
+            if firststage.store!= nothing
+                
+                #I will have to store this locally at some point...
+                path = firststage.store
+                
+                if itnum == 1
+                    println("Setting up second stage paths...")
+                    setup_scen_path!(path, sid)
+                    
+                    setup_2nd_paths!(path, firststage.subproblems[sid])
+                end
+                                                   
+            end
+        end
+        push!(wcscens, wcscen)
+        
+        UB = min(UB,wcval)
+        println("New UB is $(UB)")
+        println("New WC scens are $(wcscens)")
+        
+        if addtheta == 0
+            fs = add_theta_to_objective!(fs)
+            addtheta = 1
+        end
+        
+        if abs(UB - LB)/UB >= tol
+            println(abs(UB - LB)/UB)
+            n = length(wcscens)
+            if n > 1
+                if wcscens[n] in wcscens[1:n-1]
+                else
+                    add_wc_variables_to_fs_model!(fs, v_dict, wcscen)
+                    v1array = get_1st_stage_variable_array(v_dict)
+                    add_wc_constraints!(fs, firststage.subproblems[wcscen].model, wcscen, v1array)
+                    add_obj_constraint!(fs, firststage.subproblems[wcscen].model, wcscen, v1array)
+                end
+            else
+                add_wc_variables_to_fs_model!(fs, v_dict, wcscen)
+                v1array = get_1st_stage_variable_array(v_dict)
+                add_wc_constraints!(fs, firststage.subproblems[wcscen].model, wcscen, v1array)
+                add_obj_constraint!(fs, firststage.subproblems[wcscen].model, wcscen, v1array)                
+            end
+        end
+                
+    end
+    
+    println("L-Shaped Algorithm Failed to converge in $(niter) iterations.")
+    
+    return x, firststage, fs, itnum, wcscens
+    
+end
+
+function add_obj_constraint!(exmodel::JuMP.Model, submodel::JuMP.Model, scen::Int64, v1array)
+    
+    subobj = JuMP.objective_function(submodel)
+    terms = subobj.terms
+    theta = JuMP.variable_by_name(exmodel, "theta")
+    objfunc = AffExpr()
+    for (subvar, coeff) in terms
+        subvarname = JuMP.name(subvar)
+        if subvarname in v1array
+        else
+            exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+            JuMP.add_to_expression!(objfunc, coeff, exvar)
+        end
+    end
+    JuMP.@constraint(exmodel, objfunc <= theta)
+    
+    return 
+    
+end
+            
+            
+# this needs to be edited before building
+function add_wc_constraints!(exmodel::JuMP.Model, submodel::JuMP.Model, scen::Int64, v1array)
+    
+    for (F,S) in list_of_constraint_types(submodel)
+        for con in all_constraints(submodel,F,S)
+            if occursin("AffExpr",string(F))
+                newfunc = JuMP.AffExpr()
+                terms = JuMP.constraint_object(con).func.terms
+                if occursin("EqualTo", string(S))
+                    value = constraint_object(con).set.value
+                    for (subvar, coeff) in terms
+                        subvarname = JuMP.name(subvar)
+                        if subvarname in v1array 
+                            exvar = JuMP.variable_by_name(exmodel, subvarname)
+                        else
+                            exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                        end
+                        JuMP.add_to_expression!(newfunc, coeff, exvar)
+                    end
+                    JuMP.@constraint(exmodel, newfunc == value)
+                elseif occursin("GreaterThan", string(S))
+                    value = constraint_object(con).set.lower
+                    count=0
+                    for (subvar, coeff) in terms
+                        subvarname = JuMP.name(subvar)
+                        if subvarname in v1array 
+                            exvar = JuMP.variable_by_name(exmodel, subvarname)
+                        else
+                            exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                        end
+                        JuMP.add_to_expression!(newfunc, coeff, exvar)
+                    end
+                    JuMP.@constraint(exmodel, newfunc >= value)
+                elseif occursin("LessThan", string(S))
+                    value = constraint_object(con).set.upper
+                    count = 0
+                    for (subvar, coeff) in terms
+                        subvarname = JuMP.name(subvar)
+                        if subvarname in v1array 
+                            exvar = JuMP.variable_by_name(exmodel, subvarname)
+                        else
+                            exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                        end
+                        JuMP.add_to_expression!(newfunc, coeff, exvar)
+                    end
+                    JuMP.@constraint(exmodel, newfunc <= value)
+                elseif occursin("Interval", string(S))
+                    valu = constraint_object(con).set.upper
+                    vall = constraint_object(con).set.lower
+                    count = 0
+                    for (subvar, coeff) in terms
+                        subvarname = JuMP.name(subvar)
+                        if subvarname in v1array 
+                            exvar = JuMP.variable_by_name(exmodel, subvarname)
+                        else
+                            exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                        end
+                        JuMP.add_to_expression!(newfunc, coeff, exvar)
+                    end
+                    JuMP.@constraint(exmodel, vall <= newfunc <= valu)
+                else
+                    println(con)
+                    println("Add ", S, " to constraints.")
+                end
+            else
+                subvar = JuMP.constraint_object(con).func
+                if occursin("EqualTo", string(S))
+                    #println("Ignoring because the only fixed value variable constraints should be for first stage variables.")
+                    #=
+                    value = constraint_object(con).set.value
+                    subvarname = JuMP.name(subvar)
+                    if subvarname in v1array 
+                        exvar = JuMP.variable_by_name(exmodel, subvarname)
+                    else
+                        exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                    end
+                    JuMP.add_to_expression!(newfunc, coeff, exvar)
+                    JuMP.@constraint(exmodel, newfunc == value)
+                    =#
+                elseif occursin("GreaterThan", string(S))
+                    value = constraint_object(con).set.lower
+                    subvarname = JuMP.name(subvar)
+                    if subvarname in v1array 
+                        exvar = JuMP.variable_by_name(exmodel, subvarname)
+                    else
+                        exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                    end
+                    JuMP.@constraint(exmodel, exvar >= value)
+                elseif occursin("LessThan", string(S))
+                    value = constraint_object(con).set.upper
+                    subvarname = JuMP.name(subvar)
+                    if subvarname in v1array 
+                        exvar = JuMP.variable_by_name(exmodel, subvarname)
+                    else
+                        exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                    end
+                    JuMP.@constraint(exmodel, exvar <= value)
+                elseif occursin("Interval", string(S))
+                    valu = constraint_object(con).set.upper
+                    vall = constraint_object(con).set.lower
+                    subvarname = JuMP.name(subvar)
+                    if subvarname in v1array 
+                        exvar = JuMP.variable_by_name(exmodel, subvarname)
+                    else
+                        exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                    end
+                    JuMP.@constraint(exmodel, vall <= exvar <= valu)
+                else
+                    println(con)
+                    println("Add ", S, " to constraints.")
+                end
+            end
+        end
+    end
+    
+    return
+end
+
+function get_1st_stage_variable_array(v_dict)
+    
+    n = length(v_dict[1])
+    v1array = [];
+    for i = 1:n
+        push!(v1array, v_dict[1][i][1])
+    end
+    
+    return v1array
+end
+
+function add_wc_variables_to_fs_model!(model::JuMP.Model, v_dict, scen::Int64)
+    
+    n = length(v_dict[2])
+    
+    for i = 1:n
+        JuMP.@variable(model, base_name = string(v_dict[2][i],"_$(scen)"))
+    end
+        
+    return
+end
+

@@ -84,6 +84,9 @@ function L_Shaped_Algorithm_new(subproblem_generator::Function,
         ittime = @elapsed x, firststage, fs, niter = iterate_L_multicut(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
     elseif multicut == 2
         ittime = @elapsed x, firststage, fs, niter = iterate_L_regularized_decomp(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound, rho, rhomin, rhomax, gamma)
+    elseif multicut == 3
+        ittime = @elapsed x, firststage, fs, niter, wcscens = iterate_CaCG(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume)
+        return x, firststage, fs, niter, wcscens, ittime
     else 
         ittime = @elapsed x, firststage, fs, niter = iterate_L_new(firststage, fs, v_dict, 0, tol, maxiter, verbose, resume, lowerbound)
     end
