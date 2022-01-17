@@ -32,7 +32,7 @@ blxtest = [46.66666666666667, 36.25]
 
 #xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-10, 1000; multicut=2, rho = .01, rhomin = .00078125, rhomax = 12.8, gamma = 0.01);
 
-xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-6, 10; multicut=3);
+xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-8, 10; multicut=3);
 
 println("please stop showing")
 
