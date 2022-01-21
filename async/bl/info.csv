@@ -1,7 +1,7 @@
 first,second
 fsmodel,bl1
 ssmodel,bl2
-tol,1.00E-06
+tol,1.00E-08
 vardict,blv
 nsubs,2
 converged,1

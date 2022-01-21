@@ -383,6 +383,60 @@ function setup_1st_paths!(firststage::FirstStageInfo)
     return
 end
 
+function setup_ro_paths!(firststage::FirstStageInfo, nscen::Int64)
+    
+    path = firststage.store
+    vardict = firststage.variables
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vname in keys(vardict)
+        
+        varinfo = vardict[vname]
+        index = varinfo.index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    dfx = DataFrame()
+    dflb = DataFrame(lower_bound = Float64[])
+    dfub = DataFrame(upper_bound = Float64[])
+    dfscen = DataFrame(scenario = Int64[])
+    dfobjval = DataFrame(objval = Float64[])
+    
+    for i = 1:nvars
+        insertcols!(dfx, i, Symbol(header[i])=>Float64[])
+    end
+    
+    mkdir(path)
+    
+    xcsv = string(path, "x.csv")
+    lbcsv = string(path, "lb.csv")
+    ubcsv = string(path, "ub.csv")
+    scencsv = string(path, "scenarios.csv")
+    
+    CSV.write(xcsv, dfx)
+    CSV.write(lbcsv, dflb)
+    CSV.write(ubcsv, dfub)
+    CSV.write(scencsv, dfscen)
+    
+    for i = 1:nscen
+        scenpath = string(path, "scen_$(i)/")
+        mkdir(scenpath)
+        
+        objvalcsv = string(scenpath, "objval.csv")
+        
+        CSV.write(objvalcsv, dfobjval)
+        
+    end
+    
+    return
+end
+
 function setup_1st_paths_multicut!(firststage::FirstStageInfo, nscen::Int64)
         
     path = firststage.store
@@ -496,6 +550,52 @@ function store_x!(firststage::FirstStageInfo)
     return
     
 end
+
+function store_LB!(LB::Float64, path::String)
+   
+    lbcsv = string(path, "lb.csv")
+    
+    open(lbcsv, "a") do io
+        write(io, "$(LB) \n")
+    end
+    
+    return
+end
+
+function store_UB!(UB::Float64, path::String)
+   
+    ubcsv = string(path, "ub.csv")
+    
+    open(ubcsv, "a") do io
+        write(io, "$(UB) \n")
+    end
+    
+    return
+end
+
+function store_scen!(scen::Int64, path::String)
+   
+    scsv = string(path, "scenarios.csv") ## doublecheck name
+    
+    open(scsv, "a") do io
+        write(io, "$(scen) \n")
+    end
+    
+    return
+end
+
+function store_objval!(objval::Float64, sid::Int64, path::String)
+   
+    scenpath = string(path, "scen_$(sid)/")
+    ovcsv = string(scenpath, "objval.csv")
+    
+    open(ovcsv, "a") do io
+        write(io, "$(objval) \n")
+    end
+    
+    return
+end
+    
 
 function store_a!(a, path::String)
     

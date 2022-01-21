@@ -34,6 +34,6 @@ blxtest = [46.66666666666667, 36.25]
 
 xm, probstructm, fsmodelm, ittimem, niterm = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-8, 10; multicut=3);
 
-println("please stop showing")
+println(" ")
 
 #x, probstruct, fsmodel, ittime, niter = LShaped.L_Shaped_Algorithm_new(second_func, sedict, 12, first_func, 1e-6, 200);

@@ -9,7 +9,7 @@ using LinearAlgebra
 
 using LShaped
 
-for i = 1:100
+for i = 1:150
     
     include("firststage_regdec.jl")
     

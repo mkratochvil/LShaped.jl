@@ -2,13 +2,13 @@
 filestring = string(@__FILE__)
 arrayid = 0
 n = length(filestring)
-if filestring[n-4] == 'c'
+if filestring[n-4] == 'o'
     arrayid = parse(Int64,filestring[n-3])
-elseif filestring[n-5] == 'c'
+elseif filestring[n-5] == 'o'
     arrayid = parse(Int64,filestring[n-4:n-3])
-elseif filestring[n-6] == 'c'
+elseif filestring[n-6] == 'o'
     arrayid = parse(Int64,filestring[n-5:n-3])
-elseif filestring[n-7] == 'c'
+elseif filestring[n-7] == 'o'
     arrayid = parse(Int64,filestring[n-6:n-3])
 end
 
@@ -21,7 +21,6 @@ infoloc = "./info.csv"
 info = CSV.File(infoloc) |> Dict
 
 converged = parse(Int64,info["converged"])
-tol = parse(Float64,info["tol"])
 
 if converged == 0
 
@@ -51,16 +50,14 @@ if converged == 0
 
     idxtocon = LShaped.IdxToCon(model2)
 
-    #println("computing h for subproblem $(arrayid)...")
-    ### rework h as a file to potentially save time
+    #println("computing h for subproblem $(arrayid)...") ## unneccessary and waste of time
     h = LShaped.compute_h_new(model2, idxtocon)
-    ### 
 
     #println("Initializing subproblem $(arrayid)...")
     model2, varstructs, vnametoidx = LShaped.initialize(model2, vardict)
 
     #println("Creating subprob[$(arrayid)] struct...")
-    subprob = LShaped.SubproblemsNew(arrayid, model2, #=0.6=#1/12, varstructs, idxtocon, h, 
+    subprob = LShaped.SubproblemsNew(arrayid, model2, 1/12, varstructs, idxtocon, h, 
             nothing, nothing, vnametoidx, nothing)
 
     firststagevars = Dict()
@@ -99,47 +96,12 @@ if converged == 0
     end
 
     LShaped.solve_sub_and_update!(firststage.subproblems[arrayid])
-    LShaped.update_second_index!(firststage)
+    LShaped.update_second_index!(firststage)    
 
-    if size(x,1) == 1
-        LShaped.setup_scen_path!(dataloc, arrayid)
-        LShaped.setup_2nd_paths_regdec!(dataloc, firststage.subproblems[arrayid])
-    end
+    subproblem = firststage.subproblems[arrayid] 
+    objval = subproblem.objective_value
+    LShaped.store_objval!(objval, arrayid, dataloc)
 
-    subproblem = firststage.subproblems[arrayid]
-    #we are set up so that the models have no interval constraints. 
-    #LShaped.adjust_h_new!(subproblem) 
-    LShaped.compute_Ek_new!(subproblem)
-    LShaped.compute_ek_new!(subproblem)
-    #println("model1 = ",model1)
-    cost = LShaped.get_cost_vector(firststage, model1)
-    
-    subproblem.Ek = subproblem.probability*cost + subproblem.Ek
-    Ek = subproblem.Ek
-    ek = subproblem.ek
-    #note I did not check if it was in the same order. It should be?
-    w = ek - dot(Ek,xvals)
-    
-    #load in theta (only need specific theta)
-    patht = string(dataloc, "theta.csv")
-    thetadf = DataFrame(CSV.File(patht))
-    dfend = size(thetadf,1)
-    theta = thetadf[dfend,arrayid]
-    
-    addcut = 0
-    if theta < w - tol
-        addcut = 1
-    end
-    
-    #-compare Ek, and w, and a value whether or not to add the cut
-    #-something else....look it up. sorry future (i.e. present) me. Love, past me.
-    LShaped.store_Ek_sub!(subproblem, dataloc)
-    LShaped.store_ek_sub!(subproblem, dataloc)
-    LShaped.store_cut_sub!(addcut, dataloc, arrayid)
-    
-    objval = subproblem.probability*JuMP.objective_value(subproblem.model)
-    
-    LShaped.store_objval!(objval, dataloc, arrayid)
     
 else
     println("Yay It worked")
