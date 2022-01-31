@@ -4,7 +4,7 @@ include("../../../FinalProject/get_functions.jl")
 
 function first_func()
     
-    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/first_stage/first_stage_model.mps")
+    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/first_stage/first_stage_model_PR_exp1B.mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
     set_optimizer_attribute(model, "OutputFlag", 0) 
     JuMP.set_optimizer_attribute(model, "Method", 1)  
@@ -12,9 +12,11 @@ function first_func()
     return model
 end
 
-function second_func(scen)
+function second_func(i)
     
-    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_scen_$(scen).mps")
+    scen = ercotscens[i]
+    #model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_PR_exp3_scen_$(scen).mps")
+    model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/ercot/PR_exp3_scen_$(scen).mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
     set_optimizer_attribute(model, "OutputFlag", 0) 
     JuMP.set_optimizer_attribute(model, "Method", 1) 
@@ -24,12 +26,13 @@ end
 
  sedict = Dict{Int64,Array{Any}}()
 
-modelvars = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_scen_1.mps")
+#modelvars = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_PR_exp5p0015_scen_1.mps")
+modelvars = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/ercot/PR_exp3_scen_1.mps")
 
 firstvars = []
 for bus in buses
     push!(firstvars,(string(get_PR_variable(modelvars,bus)), 0.0, Inf, 0.0))
-    push!(firstvars,(string(get_ER_variable(modelvars,bus)), 0.0, Inf, 0.0))
+    #push!(firstvars,(string(get_ER_variable(modelvars,bus)), 0.0, Inf, 0.0))
 end
 
  sedict[1] = firstvars

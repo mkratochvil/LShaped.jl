@@ -532,6 +532,63 @@ function setup_1st_paths_regdec!(firststage::FirstStageInfo, nscen::Int64)
     return
 end
 
+function setup_1st_paths_trust!(firststage::FirstStageInfo, nscen::Int64)
+        
+    path = firststage.store
+    vardict = firststage.variables
+    nvars = vardict.count
+    
+    header = Array{Union{Nothing, String}}(nothing, nvars)
+    
+    for vname in keys(vardict)
+        
+        varinfo = vardict[vname]
+        index = varinfo.index
+        
+        header[index] = vname
+        
+    end
+    
+    nvars = length(header)
+    
+    dfs = DataFrame(ssobja = Float64[], fsobj = Float64[], ssobjx = Float64[], concrit = Float64[], delta = Float64[], delcrit = Float64[]);
+    dfx = DataFrame()
+    dft = DataFrame()
+    dfa = DataFrame()
+    dfo = DataFrame(objval = Float64[])
+    dffs = DataFrame(fsobj = Float64[])
+    dfd = DataFrame(delta = Float64[])
+    
+    for i = 1:nvars
+        insertcols!(dfx, i, Symbol(header[i])=>Float64[])
+        insertcols!(dfa, i, Symbol(header[i])=>Float64[])
+    end
+    
+    for i = 1:nscen
+        insertcols!(dft, i, Symbol(i)=>Float64[])
+    end
+    
+    mkdir(path)
+    
+    scsv = string(path, "iteration_summary.csv")
+    xcsv = string(path, "x.csv")
+    tcsv = string(path, "theta.csv")
+    acsv = string(path, "a.csv")
+    ocsv = string(path, "ssobja.csv")
+    fscsv = string(path, "fsobj.csv")
+    dcsv = string(path, "delta.csv")
+    
+    CSV.write(scsv, dfs)
+    CSV.write(xcsv, dfx)
+    CSV.write(tcsv, dft)
+    CSV.write(acsv, dfa)
+    CSV.write(ocsv, dfo)
+    CSV.write(fscsv, dffs)
+    CSV.write(dcsv, dfd)
+    
+    return
+end
+
 function store_x!(firststage::FirstStageInfo)
     
     path = firststage.store
@@ -614,6 +671,20 @@ function store_a!(a, path::String)
     
 end
 
+function store_iteration_summary!(ssobja, fsobj, ssobjx, concrit, delta, delcrit, path::String)
+    
+    scsv = string(path, "iteration_summary.csv")
+    
+    str = string(ssobja, ", ", fsobj, ", ", ssobjx, ", ",concrit, ", ", delta, ", ", delcrit)
+
+    open(scsv, "a") do io
+        write(io, "$(str) \n")
+    end
+    
+    return
+    
+end
+
 
 function store_ssobja!(ssobja, path::String)
     
@@ -643,6 +714,17 @@ function store_rho!(rho, path::String)
     
     open(rcsv, "a") do io
         write(io, "$(rho) \n")
+    end
+    
+    return
+end
+
+function store_delta!(delta, path::String)
+    
+    dcsv = string(path, "delta.csv")
+    
+    open(dcsv, "a") do io
+        write(io, "$(delta) \n")
     end
     
     return
@@ -1274,6 +1356,17 @@ function get_rho_from_file(path::String)
     return rho
 end
 
+function get_delta_from_file(path::String)
+    
+    dpath = string(path, "delta.csv")
+    
+    ddf = DataFrame(CSV.File(dpath))
+    
+    delta = ddf[size(ddf,1),1]
+    
+    return delta
+end
+
 function get_theta_from_file(path::String)
     
     tpath = string(path, "theta.csv")
@@ -1488,6 +1581,124 @@ function resume_fs_regdec!(firststage::FirstStageInfo, v_dict, model::JuMP.Model
     return model, curit, ssobja, rho
 end
 
+function resume_fs_trust!(firststage::FirstStageInfo, v_dict, model::JuMP.Model, nscen::Int64, delta::Float64, header, deltamin, deltamax, gamma)
+    
+    converged = 0
+    path = firststage.store
+    pathx = string(path, "x.csv")
+    patha = string(path, "a.csv")
+    ssobjacsv = string(path, "ssobja.csv")
+    fsobjcsv = string(path, "fsobj.csv")
+    deltacsv = string(path, "delta.csv")
+
+    xdf = DataFrame(CSV.File(pathx))
+    adf = DataFrame(CSV.File(patha))
+    fsobjdf = DataFrame(CSV.File(fsobjcsv))
+    deltadf = DataFrame(CSV.File(deltacsv))
+    
+    na = size(adf,1)
+    nx = size(xdf,1)
+    nfs = size(fsobjdf,1)
+    ndelta = size(deltadf,1)
+    
+    curit= size(xdf,1)
+    ssobjadf = DataFrame()
+    ssobja = 0.0
+    if curit > 1
+        ssobjadf = DataFrame(CSV.File(ssobjacsv))
+        ssobja = ssobjadf[size(ssobjadf,1),1]
+        a = collect(adf[na,:])
+    end
+    
+    x = collect(xdf[nx,:])
+    fsobj = fsobjdf[nfs,1]
+    
+    #check convergence
+    numcuts = 0
+    
+    add_theta_to_objective!(model, nscen)
+    
+    ssobjx = 0.0
+    
+    for sid = 1:nscen
+        pathE = string(path, "scen_$(sid)/E.csv")
+        pathe = string(path, "scen_$(sid)/ek.csv")
+        pathc = string(path, "scen_$(sid)/addcut.csv")
+        pathsobj = string(path, "scen_$(sid)/ssobjx.csv")
+        
+        E = DataFrame(CSV.File(pathE))
+        ek = DataFrame(CSV.File(pathe))
+        cuts = DataFrame(CSV.File(pathc))
+        ssobjxdf = DataFrame(CSV.File(pathsobj))
+        
+        ssobjx += ssobjxdf[size(ssobjxdf,1),1]
+        
+        #this determines if a cut was generated in the most recent iteration
+        n = size(cuts,1)
+        numcuts += cuts[n,1]
+        
+        for j = 1:n
+            if cuts[j,1] == 1
+                add_constraint_to_objective!(model, collect(E[j,:]), ek[j,1], v_dict, sid)
+            end
+        end        
+    end
+    
+    #initial ssobja = ssobjx since an initial a comes from first (linear) solve
+    if curit == 1
+        ssobja = ssobjx
+        a = x
+        LShaped.store_ssobja!(ssobja, path)
+        LShaped.store_a!(a, path)
+    end
+       
+    ##### put alg stuff here #####
+    if (ssobjx - fsobj) != 0
+        println(-(ssobja-ssobjx)/(ssobjx-fsobj))
+    end
+    delcrit = -(ssobja-ssobjx)/(1.0e-10+(ssobjx-fsobj))
+    if ssobja < ssobjx - 0.15*(ssobjx - fsobj)
+        delta = min(deltamax, 2.0*delta)
+        #if rho == rhomin
+        #    rho = 0.0
+        #end
+    elseif ssobja > ssobjx - 0.05*(ssobjx - fsobj)
+        #if rho > 0.0
+            delta = max(deltamin, 0.25*delta)
+        #else
+        #    rho = rhomin
+        #end
+    end
+    
+    print(curit, " ", ssobja, " ", ssobjx, " ", numcuts, " ")
+    if numcuts == 0
+        a = x #from last iter
+        ssobja = ssobjx
+        store_a!(a, path)
+        store_ssobja!(ssobja, path)
+    else
+        if ssobjx < ssobja
+            a = x
+            ssobja = ssobjx
+            store_a!(a, path)
+            store_ssobja!(ssobja, path)
+        else
+            store_a!(a, path)
+            store_ssobja!(ssobja, path)
+        end
+    end
+    concrit = (fsobj-ssobja)/(1.0e-10+abs(ssobja))
+    println(delta)
+
+    ## load in model, x or a vector, and header to adjust the model
+    model = add_trust_async!(model, a, header, delta)
+    
+    store_iteration_summary!(ssobja, fsobj, ssobjx, concrit, delta, delcrit, path)
+    
+    return model, curit, ssobja, delta
+end
+
+
 function add_regularized_decomp_async!(model, a, varnames, rho)
     
     n = length(a)
@@ -1505,6 +1716,22 @@ function add_regularized_decomp_async!(model, a, varnames, rho)
     
     JuMP.@objective(model, Min, linobj + newfunc)
         
+    return model
+end
+
+function add_trust_async!(model, a, varnames, delta)
+    
+    n = length(a)
+            
+    for i = 1:n
+        
+        var = JuMP.variable_by_name(model, varnames[i])
+        
+        JuMP.@constraint(model, var-a[i] >= -delta, base_name = "trlb_$(var)")
+        JuMP.@constraint(model, var-a[i] <= delta, base_name = "trub_$(var)")
+               
+    end
+            
     return model
 end
 
@@ -2287,7 +2514,7 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
         if changea == 1
             fs = add_regularized_decomp!(firststage, fs, linobj, rho)
         else
-            fs = change_rho_only!(fs, linobj, rho)
+            fs = change_rho_only!(firststage, fs, linobj, avec, rho)
         end
         #####
 
@@ -2299,7 +2526,9 @@ function iterate_L_regularized_decomp(firststage::FirstStageInfo, fs::JuMP.Model
     
 end
 
-function change_rho_only!(firststage, model, avec, rho)
+function change_rho_only!(firststage, model, linobj, avec, rho)
+    
+    vardict = firststage.variables
     
     newfunc = JuMP.GenericQuadExpr{Float64,VariableRef}()
     
@@ -2403,8 +2632,10 @@ function iterate_CaCG(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{I
         for sid in keys(firststage.subproblems)  
             #println("Solving subproblems and updating...")
             solve_sub_and_update!(firststage.subproblems[sid])
-            if JuMP.objective_value(firststage.subproblems[sid].model) > wcval
-                wcval = JuMP.objective_value(firststage.subproblems[sid].model)
+            objval = JuMP.objective_value(firststage.subproblems[sid].model)
+            println(sid, " ", objval)
+            if  objval > wcval
+                wcval = objval 
                 wcscen = sid
             end
             if firststage.store!= nothing
@@ -2452,7 +2683,7 @@ function iterate_CaCG(firststage::FirstStageInfo, fs::JuMP.Model, v_dict::Dict{I
         end
                 
     end
-    
+    x = get_value_vector(firststage)
     println("L-Shaped Algorithm Failed to converge in $(niter) iterations.")
     
     return x, firststage, fs, itnum, wcscens
@@ -2547,18 +2778,16 @@ function add_wc_constraints!(exmodel::JuMP.Model, submodel::JuMP.Model, scen::In
             else
                 subvar = JuMP.constraint_object(con).func
                 if occursin("EqualTo", string(S))
-                    #println("Ignoring because the only fixed value variable constraints should be for first stage variables.")
-                    #=
                     value = constraint_object(con).set.value
                     subvarname = JuMP.name(subvar)
                     if subvarname in v1array 
-                        exvar = JuMP.variable_by_name(exmodel, subvarname)
+                        # ignore fixed first stage variable constants
+                        #exvar = JuMP.variable_by_name(exmodel, subvarname)
                     else
+                        println(con)
                         exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
+                        JuMP.@constraint(exmodel, exvar == value)
                     end
-                    JuMP.add_to_expression!(newfunc, coeff, exvar)
-                    JuMP.@constraint(exmodel, newfunc == value)
-                    =#
                 elseif occursin("GreaterThan", string(S))
                     value = constraint_object(con).set.lower
                     subvarname = JuMP.name(subvar)

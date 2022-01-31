@@ -5,10 +5,10 @@ infoloc = "./info.csv"
 info = CSV.File(infoloc) |> Dict
 
 #add into info
-rho = 1.0
+delta = 1.0
 tau = 1e-10
-rhomax = 1.0e3#12.8
-rhomin = 1.0e-3#.00078125
+deltamax = 25.#12.8
+deltamin = 0.05#.00078125
 gamma = 0.01
 #avec = [0.01515317295046937, 0.07576586475234684, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06992444968258622, 0.3496222484129311, 0.024425242996275243, 0.10597209391518082, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.09035704399269796, 0.4517852199634898, 0.0, 0.0, 0.0, 0.0, 0.01246785328231903, 0.06233926641159515, 0.0053185494034406755, 0.026592747017203378, 0.0, 0.0, 0.08532203616288067, 0.4266101808144034, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.2892514173319449, 1.4462570866597244, 0.0, 0.0]
 #ssobja = 1507.3174544213448
@@ -60,7 +60,7 @@ if converged == 0 || ispath(dataloc) == 0
         
         
         x = LShaped.get_x_from_file(dataloc)
-        rho = LShaped.get_rho_from_file(dataloc)
+        delta = LShaped.get_delta_from_file(dataloc)
         
         ##theta = LShaped.get_theta_from_file(dataloc)
         
@@ -84,7 +84,7 @@ if converged == 0 || ispath(dataloc) == 0
         end
 
         ##curit, converged, xcur = LShaped.resume_fs!(firststage, model, tol)
-        model, curit, ssobja, rho = LShaped.resume_fs_regdec!(firststage, vardict, model, nsubs, rho, header, rhomin, rhomax, gamma)
+        model, curit, ssobja, delta = LShaped.resume_fs_trust!(firststage, vardict, model, nsubs, delta, header, deltamin, deltamax, gamma)
         # + load in each model using iterations that require cuts
         # + track the last iteration, and whether a cut was made, if sum of cuts made is 0, set converged = 1
         # + return current iterations "curit" (files are required to match) and "converged"
@@ -94,8 +94,7 @@ if converged == 0 || ispath(dataloc) == 0
             info["converged"] = "0"
             CSV.write(infoloc, info)
         end
-        ##LShaped.setup_1st_paths!(firststage)
-        LShaped.setup_1st_paths_regdec!(firststage, nsubs)
+        LShaped.setup_1st_paths_trust!(firststage, nsubs)
         
         #=
         ## create regularized problem with initial rho and avec
@@ -121,13 +120,11 @@ if converged == 0 || ispath(dataloc) == 0
     if converged == 0
         
         curit += 1
-        #println("curit = $(curit)")
 
         JuMP.optimize!(model)
         fsobj = JuMP.objective_value(model)
-        ### add this
         LShaped.store_fsobj!(fsobj, dataloc)
-        LShaped.store_rho!(rho, dataloc)
+        LShaped.store_delta!(delta, dataloc)
 
         LShaped.update_first_value_L!(firststage, model)
 

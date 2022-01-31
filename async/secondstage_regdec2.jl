@@ -14,6 +14,8 @@ end
 
 using LShaped
 
+global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/strat133.csv"))[1,:])
+
 #this would be an external variable
 infoloc = "./info.csv"
 
@@ -60,7 +62,7 @@ if converged == 0
     model2, varstructs, vnametoidx = LShaped.initialize(model2, vardict)
 
     #println("Creating subprob[$(arrayid)] struct...")
-    subprob = LShaped.SubproblemsNew(arrayid, model2, #=0.6=#1/12, varstructs, idxtocon, h, 
+    subprob = LShaped.SubproblemsNew(arrayid, model2, #=0.4=#1/12, varstructs, idxtocon, h, 
             nothing, nothing, vnametoidx, nothing)
 
     firststagevars = Dict()
