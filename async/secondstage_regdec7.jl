@@ -14,7 +14,7 @@ end
 
 using LShaped
 
-global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/strat133.csv"))[1,:])
+global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/strat133.csv"))[2,:])
 
 #this would be an external variable
 infoloc = "./info.csv"
