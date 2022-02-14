@@ -64,7 +64,7 @@ end
 lrts = 2850.0
 wrts = 713.5
 
-global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/strat133.csv"))[1,:])
+global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/shuff133.csv"))[1,:])
 
 #this would be an external variable
 infoloc = "./info.csv"
@@ -107,59 +107,60 @@ if converged == 0
     end
     
     let
-    model2 = getfield(Main,Symbol(info["ssmodel"]))(1);
+    #model2 = getfield(Main,Symbol(info["ssmodel"]))(1);
+        model2 = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_PR_exp36p00015_scen_1.mps")
+        JuMP.set_optimizer(model2, Gurobi.Optimizer)
+        set_optimizer_attribute(model2, "OutputFlag", 0)
 
         #model2 = getfield(Main,Symbol(info["ssmodel"]))(arrayid);
         for i  = 1:12
-            if i > 1
-                #println("Adjusting to scenario $(ercotscens[i])")
-                wind = (1/wmax)*(wrts/100)*collect(winddf[ercotscens[i],3:26])
-                load = (1/lmax)*(1.35*lrts/100)*collect(loaddf[ercotscens[i],3:26])
+            #println("Adjusting to scenario $(ercotscens[i])")
+            wind = (1/wmax)*(wrts/100)*collect(winddf[ercotscens[i],3:26])
+            load = (1/lmax)*(1.35*lrts/100)*collect(loaddf[ercotscens[i],3:26])
 
-                for bus in buses
-                    lf = loaddis[bus]
-                    for ts in timesteps
-                        con = get_load_balance(model2, bus, ts)
-                        oldval = JuMP.constraint_object(con).set.value
-                        lval = load[ts]
-                        JuMP.set_normalized_rhs(con, lf*lval)
-                        newval = JuMP.constraint_object(con).set.value
-                        #println("$(name(con)), $(oldval), $(newval)")
-                    end
-                end
-
-                # change ptdf constraint (remember to run load changes FIRST)
+            for bus in buses
+                lf = loaddis[bus]
                 for ts in timesteps
-                    for br in branches
-                        ptdfcon = get_ptdf_con(model2,br,ts)
-
-                        valold = JuMP.constraint_object(ptdfcon).set.value
-                        valnew = 0.0
-                        for bus in buses
-                            buscon = get_load_balance(model2,bus,ts)
-
-                            loadcon = copy(JuMP.constraint_object(buscon).func)
-                            loadval = copy(JuMP.constraint_object(buscon).set.value)
-
-                            valnew -= ptdfdict[br][bus]*loadval
-
-                        end 
-
-                        JuMP.set_normalized_rhs(ptdfcon, valnew)
-                        #println("$(JuMP.name(ptdfcon)), $(valold), $(valnew)")
-
-                    end
-                end
-
-                bus = 122
-                for ts in timesteps
-                    con = get_wind_ub(model2, bus, ts)
-                    oldval = JuMP.constraint_object(con).set.upper
-                    wval = wind[ts]
-                    JuMP.set_normalized_rhs(con, wval)
-                    newval = JuMP.constraint_object(con).set.upper
+                    con = get_load_balance(model2, bus, ts)
+                    oldval = JuMP.constraint_object(con).set.value
+                    lval = load[ts]
+                    JuMP.set_normalized_rhs(con, lf*lval)
+                    newval = JuMP.constraint_object(con).set.value
                     #println("$(name(con)), $(oldval), $(newval)")
                 end
+            end
+
+            # change ptdf constraint (remember to run load changes FIRST)
+            for ts in timesteps
+                for br in branches
+                    ptdfcon = get_ptdf_con(model2,br,ts)
+
+                    valold = JuMP.constraint_object(ptdfcon).set.value
+                    valnew = 0.0
+                    for bus in buses
+                        buscon = get_load_balance(model2,bus,ts)
+
+                        loadcon = copy(JuMP.constraint_object(buscon).func)
+                        loadval = copy(JuMP.constraint_object(buscon).set.value)
+
+                        valnew -= ptdfdict[br][bus]*loadval
+
+                    end 
+
+                    JuMP.set_normalized_rhs(ptdfcon, valnew)
+                    #println("$(JuMP.name(ptdfcon)), $(valold), $(valnew)")
+
+                end
+            end
+
+            bus = 122
+            for ts in timesteps
+                con = get_wind_ub(model2, bus, ts)
+                oldval = JuMP.constraint_object(con).set.upper
+                wval = wind[ts]
+                JuMP.set_normalized_rhs(con, wval)
+                newval = JuMP.constraint_object(con).set.upper
+                #println("$(name(con)), $(oldval), $(newval)")
             end
 
             idxtocon = LShaped.IdxToCon(model2)

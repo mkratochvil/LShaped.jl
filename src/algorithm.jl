@@ -1670,6 +1670,10 @@ function resume_fs_trust!(firststage::FirstStageInfo, v_dict, model::JuMP.Model,
         #end
     end
     
+    #add in lower bound to problem (ssobja is upper bound)
+    JuMP.optimize!(model)
+    lb = JuMP.objective_value(model)
+    
     print(curit, " ", ssobja, " ", ssobjx, " ", numcuts, " ")
     if numcuts == 0
         a = x #from last iter
@@ -1695,7 +1699,7 @@ function resume_fs_trust!(firststage::FirstStageInfo, v_dict, model::JuMP.Model,
     
     store_iteration_summary!(ssobja, fsobj, ssobjx, concrit, delta, delcrit, path)
     
-    return model, curit, ssobja, delta
+    return model, curit, ssobja, delta, lb
 end
 
 
@@ -2784,7 +2788,7 @@ function add_wc_constraints!(exmodel::JuMP.Model, submodel::JuMP.Model, scen::In
                         # ignore fixed first stage variable constants
                         #exvar = JuMP.variable_by_name(exmodel, subvarname)
                     else
-                        println(con)
+                        #println(con)
                         exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
                         JuMP.@constraint(exmodel, exvar == value)
                     end

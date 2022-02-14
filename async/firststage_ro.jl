@@ -1,3 +1,58 @@
+
+## make sure these files and their dependencies are in their proper place ##
+include("../../FinalProject/parameters.jl")
+include("../../FinalProject/get_functions.jl")
+loadcsv = CSV.File("../../FinalProject/LOAD.csv");
+ptdfdf = DataFrame(CSV.File("../../FinalProject/ptdfsmall.csv"));
+
+expid = 5
+
+include("../../FinalProject/modification_functions_async.jl")
+##
+
+## upload these to cluster ##
+loaddf = DataFrame(CSV.File("../../FinalProject/loaddata.csv"))
+winddf = DataFrame(CSV.File("../../FinalProject/winddata.csv"))
+##
+## make sure this is uploaded with everything ## 
+ptdfdf = DataFrame(CSV.File("../../FinalProject/ptdfsmall.csv"));
+##
+
+let 
+    lmax = 0.0
+    wmax = 0.0
+    for i = 1:24
+        #println(i, " ", maximum(loaddf[:,2+i]))
+        if maximum(loaddf[:,2+i]) > lmax
+            lmax = maximum(loaddf[:,2+i])
+        end
+        #println(maximum(winddf[:,2+i]))
+        if maximum(winddf[:,2+i]) > wmax
+            wmax = maximum(winddf[:,2+i])
+        end
+    end
+    global lmax = lmax
+    global wmax = wmax
+end
+
+loaddis = load_distribution_dict(loadcsv);
+
+ptdfdict = Dict()
+
+for i = 1:38
+    br = ptdfdf[i,1]
+    ptdfdict[br] = Dict()
+    for j = 2:25
+        bus = parse(Int64,names(ptdfdf)[j])
+        ptdfdict[br][bus] = ptdfdf[i,j]
+    end
+end
+
+lrts = 2850.0
+wrts = 713.5
+
+global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/part1458.csv"))[expid,:])
+
 #this would be an external variable
 infoloc = "./info.csv"
 
@@ -83,14 +138,66 @@ if converged == 0 || ispath(dataloc) == 0
             # set up for another run
             LShaped.add_theta_to_objective!(model)
             scenset = DataFrame(CSV.File(string(dataloc,"scenarios.csv")))
-            for i = 1:size(scenset,1)
-                scen = scenset[i,1]
-                model2nd = getfield(Main,Symbol(info["ssmodel"]))(scen);
+            
+            let
+                model2nd = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/ercot/PR_exp3_scen_1.mps")
                 
-                LShaped.add_wc_variables_to_fs_model!(model, vardict, scen)
-                v1array = LShaped.get_1st_stage_variable_array(vardict)
-                LShaped.add_wc_constraints!(model, model2nd, scen, v1array)
-                LShaped.add_obj_constraint!(model, model2nd, scen, v1array)
+                for i = 1:size(scenset,1)
+                    scen = scenset[i,1]
+                    #println("Adjusting to scenario $(ercotscens[i])")
+                    wind = (1/wmax)*(wrts/100)*collect(winddf[ercotscens[scen],3:26])
+                    load = (1/lmax)*(1.35*lrts/100)*collect(loaddf[ercotscens[scen],3:26])
+
+                    for bus in buses
+                        lf = loaddis[bus]
+                        for ts in timesteps
+                            con = get_load_balance(model2nd, bus, ts)
+                            oldval = JuMP.constraint_object(con).set.value
+                            lval = load[ts]
+                            JuMP.set_normalized_rhs(con, lf*lval)
+                            newval = JuMP.constraint_object(con).set.value
+                            #println("$(name(con)), $(oldval), $(newval)")
+                        end
+                    end
+
+                    # change ptdf constraint (remember to run load changes FIRST)
+                    for ts in timesteps
+                        for br in branches
+                            ptdfcon = get_ptdf_con(model2nd,br,ts)
+
+                            valold = JuMP.constraint_object(ptdfcon).set.value
+                            valnew = 0.0
+                            for bus in buses
+                                buscon = get_load_balance(model2nd,bus,ts)
+
+                                loadcon = copy(JuMP.constraint_object(buscon).func)
+                                loadval = copy(JuMP.constraint_object(buscon).set.value)
+
+                                valnew -= ptdfdict[br][bus]*loadval
+
+                            end 
+
+                            JuMP.set_normalized_rhs(ptdfcon, valnew)
+                            #println("$(JuMP.name(ptdfcon)), $(valold), $(valnew)")
+
+                        end
+                    end
+
+                    bus = 122
+                    for ts in timesteps
+                        con = get_wind_ub(model2nd, bus, ts)
+                        oldval = JuMP.constraint_object(con).set.upper
+                        wval = wind[ts]
+                        JuMP.set_normalized_rhs(con, wval)
+                        newval = JuMP.constraint_object(con).set.upper
+                        #println("$(name(con)), $(oldval), $(newval)")
+                    end
+
+                    LShaped.add_wc_variables_to_fs_model!(model, vardict, scen)
+                    v1array = LShaped.get_1st_stage_variable_array(vardict)
+                    LShaped.add_wc_constraints!(model, model2nd, scen, v1array)
+                    LShaped.add_obj_constraint!(model, model2nd, scen, v1array)
+                end
             end
         end
         
