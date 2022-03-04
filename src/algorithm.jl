@@ -551,7 +551,7 @@ function setup_1st_paths_trust!(firststage::FirstStageInfo, nscen::Int64)
     
     nvars = length(header)
     
-    dfs = DataFrame(ssobja = Float64[], fsobj = Float64[], ssobjx = Float64[], concrit = Float64[], delta = Float64[], delcrit = Float64[]);
+    dfs = DataFrame(itnum= Int64[], ssobja = Float64[], fsobj = Float64[], ssobjx = Float64[], abscrit = Float64[], concrit = Float64[], delta = Float64[], delcrit = Float64[], numcuts = Float64[]);
     dfx = DataFrame()
     dft = DataFrame()
     dfa = DataFrame()
@@ -671,11 +671,11 @@ function store_a!(a, path::String)
     
 end
 
-function store_iteration_summary!(ssobja, fsobj, ssobjx, concrit, delta, delcrit, path::String)
+function store_iteration_summary!(curit, ssobja, fsobj, ssobjx, abscrit, concrit, delta, delcrit, numcuts, path::String)
     
     scsv = string(path, "iteration_summary.csv")
     
-    str = string(ssobja, ", ", fsobj, ", ", ssobjx, ", ",concrit, ", ", delta, ", ", delcrit)
+    str = string(curit-1, ", ", ssobja, ", ", fsobj, ", ", ssobjx, ", ", abscrit, ", ", concrit, ", ", delta, ", ", delcrit, ", ", numcuts)
 
     open(scsv, "a") do io
         write(io, "$(str) \n")
@@ -1670,10 +1670,6 @@ function resume_fs_trust!(firststage::FirstStageInfo, v_dict, model::JuMP.Model,
         #end
     end
     
-    #add in lower bound to problem (ssobja is upper bound)
-    JuMP.optimize!(model)
-    lb = JuMP.objective_value(model)
-    
     print(curit, " ", ssobja, " ", ssobjx, " ", numcuts, " ")
     if numcuts == 0
         a = x #from last iter
@@ -1691,15 +1687,21 @@ function resume_fs_trust!(firststage::FirstStageInfo, v_dict, model::JuMP.Model,
             store_ssobja!(ssobja, path)
         end
     end
-    concrit = (fsobj-ssobja)/(1.0e-10+abs(ssobja))
+    JuMP.optimize!(model)
+    lb = JuMP.objective_value(model)
+
+    #concrit = (fsobj-ssobja)/(1.0e-10+abs(ssobja))
+    concrit = (lb-ssobja)/(1.0e-10+abs(ssobja))
+    abscrit = ssobja-lb
+
     println(delta)
 
     ## load in model, x or a vector, and header to adjust the model
     model = add_trust_async!(model, a, header, delta)
     
-    store_iteration_summary!(ssobja, fsobj, ssobjx, concrit, delta, delcrit, path)
+    #store_iteration_summary!(ssobja, fsobj, ssobjx, concrit, delta, delcrit, numcuts, path)
     
-    return model, curit, ssobja, delta, lb
+    return model, curit, ssobja, delta, ssobjx, delcrit, numcuts, lb, abscrit
 end
 
 
@@ -2788,7 +2790,7 @@ function add_wc_constraints!(exmodel::JuMP.Model, submodel::JuMP.Model, scen::In
                         # ignore fixed first stage variable constants
                         #exvar = JuMP.variable_by_name(exmodel, subvarname)
                     else
-                        #println(con)
+                        println(con)
                         exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
                         JuMP.@constraint(exmodel, exvar == value)
                     end

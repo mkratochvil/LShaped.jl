@@ -6,8 +6,8 @@ function first_func()
     
     model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/first_stage/first_stage_model_PR_exp1B.mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
-    #set_optimizer_attribute(model, "OutputFlag", 0) 
-    set_optimizer_attribute(model, "NumericFocus", 3)
+    set_optimizer_attribute(model, "OutputFlag", 0) 
+    JuMP.set_optimizer_attribute(model, "NumericFocus", 3)
     JuMP.set_optimizer_attribute(model, "Method", 1)  
     
     return model
@@ -20,8 +20,8 @@ function second_func(i)
     #model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/second_stage/noint_PR_exp3_scen_$(scen).mps")
     model = JuMP.read_from_file("../../FinalProject/storage_expansion_revised/ercot/PR_exp3_scen_$(scen).mps")
     JuMP.set_optimizer(model, Gurobi.Optimizer)
-    set_optimizer_attribute(model, "OutputFlag", 0) 
-    JuMP.set_optimizer_attribute(model, "Method", 1) 
+    JuMP.set_optimizer_attribute(model, "OutputFlag", 0) 
+    #JuMP.set_optimizer_attribute(model, "Method", 1) 
 
     return model
 end
