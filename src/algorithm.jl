@@ -2790,7 +2790,7 @@ function add_wc_constraints!(exmodel::JuMP.Model, submodel::JuMP.Model, scen::In
                         # ignore fixed first stage variable constants
                         #exvar = JuMP.variable_by_name(exmodel, subvarname)
                     else
-                        println(con)
+                        #println(con)
                         exvar = JuMP.variable_by_name(exmodel, string(subvarname,"_$(scen)"))
                         JuMP.@constraint(exmodel, exvar == value)
                     end
