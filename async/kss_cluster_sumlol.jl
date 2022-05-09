@@ -1,4 +1,3 @@
-# messed up model. needs to be changed back to correct four_wind path
 expid = 1
 K = 12
 
@@ -75,7 +74,7 @@ end
 #wrts = 713.5
 
 ### keep these
-global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/four_wind/clusters_c$(K).csv"))[expid,:])
+global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/four_wind/clusters_r$(K).csv"))[expid,:])
 #global ercotscens = collect(DataFrame(CSV.File("../../FinalProject/scenarios/part133.csv"))[expid,35:46])
 global probs = collect(DataFrame(CSV.File("../../FinalProject/scenarios/four_wind/probs_$(K).csv"))[expid,:])
 ### 

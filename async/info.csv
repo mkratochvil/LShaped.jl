@@ -3,8 +3,8 @@ fsmodel,first_func
 ssmodel,second_func
 tol,1.00E-05
 vardict,sedict
-nsubs,24
+nsubs,12
 converged,1
-ssscript,models_4wind.jl
-dir,./storage_expansion/
-fsscript,models_4wind.jl
+ssscript,models_sum_lol.jl
+dir,./sum_lol/
+fsscript,models_sum_lol.jl
